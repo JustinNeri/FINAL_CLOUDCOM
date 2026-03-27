@@ -22,7 +22,7 @@ class CatchMonsterScreen extends StatefulWidget {
 
 class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
   // Replace with your API base (FastAPI/PHPScript over VPN)
-  final String apiBase = "http://15.224.51.87";
+  final String apiBase = "http://100.69.77.17";
 
   String latitude = "";
   String longitude = "";

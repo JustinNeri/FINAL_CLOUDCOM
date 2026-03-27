@@ -18,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  final String apiBase = 'http://15.224.51.87';
+  final String apiBase = 'http://100.69.77.17';
 
   bool loading = false;
   String error = '';

@@ -21,7 +21,7 @@ class ShowMonsterMapScreen extends StatefulWidget {
 
 class _ShowMonsterMapScreenState extends State<ShowMonsterMapScreen> {
   late final TextEditingController _playerController;
-  final String apiBase = 'http://15.224.51.87';
+  final String apiBase = 'http://100.69.77.17';
   final MapController _mapController = MapController();
 
   bool loading = false;

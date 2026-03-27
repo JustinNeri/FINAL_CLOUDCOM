@@ -21,7 +21,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   String loadError = '';
   List<_Monster> caughtMonsters = [];
 
-  final String apiBase = 'http://15.224.51.87';
+  final String apiBase = 'http://100.69.77.17';
   String get listEndpoint => '$apiBase/get_caught_monsters_api.php';
 
   @override

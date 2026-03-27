@@ -39,7 +39,7 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
     }
 
     final url = Uri.parse(
-      "http://15.224.51.87/add_monster_api.php"
+      "http://100.69.77.17/add_monster_api.php"
       "?name=$name&type=$type&lat=$lat&lon=$lon&radius=$radius",
     );
 
