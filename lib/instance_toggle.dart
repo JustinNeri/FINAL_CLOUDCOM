@@ -85,26 +85,45 @@ class InstanceToggleCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  instanceOn
-                      ? 'All systems nominal. Catch flows and monitoring are active.'
-                      : 'Paused for maintenance. Reactivate to resume catch and detect.',
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.7),
-                    fontSize: 12.5,
-                    height: 1.35,
+                      const SizedBox(height: 8),
+                      Text(
+                        instanceOn
+                            ? 'All systems nominal. Catch flows and monitoring are active.'
+                            : 'Paused for maintenance. Reactivate to resume catch and detect.',
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.7),
+                          fontSize: 12.5,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: instanceOn ? baseGreen.withOpacity(0.12) : Colors.grey.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: borderGreen.withOpacity(0.12)),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0,4)),
+                            ],
+                          ),
+                          child: Transform.scale(
+                            scale: 1.6,
+                            child: Switch(
+                              value: instanceOn,
+                              activeColor: Colors.white,
+                              activeTrackColor: baseGreen,
+                              inactiveThumbColor: Colors.white,
+                              inactiveTrackColor: borderGreen.withOpacity(0.25),
+                              onChanged: onChanged,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: instanceOn,
-            activeColor: Colors.white,
-            activeTrackColor: baseGreen,
-            onChanged: onChanged,
-          ),
         ],
       ),
     );

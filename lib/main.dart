@@ -10,6 +10,7 @@ import 'show_monster_map.dart';
 import 'login_screen.dart';
 import 'player_accounts_screen.dart';
 import 'auth_models.dart';
+import 'theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -43,9 +44,48 @@ class _MyAppState extends State<MyApp> {
       title: 'Monster Control Center',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F6F4F)),
-        scaffoldBackgroundColor: const Color(0xFFEFF5EC),
+        primaryColor: ThemeColors.deepNavy,
+        colorScheme: ColorScheme.fromSeed(seedColor: ThemeColors.deepNavy),
+        scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+        fontFamily: 'Montserrat',
         useMaterial3: false,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: ThemeColors.deepNavy,
+          elevation: 2,
+          toolbarHeight: 86,
+          titleTextStyle: const TextStyle(color: ThemeColors.deepNavy, fontSize: 20, fontWeight: FontWeight.w800),
+          iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(18))),
+          titleSpacing: 16,
+        ),
+        cardTheme: CardThemeData(
+          color: ThemeColors.cardNavy,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: ThemeColors.borderNavy, width: 1)),
+          elevation: 4,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.all(12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFB0BEC5))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFB0BEC5))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: ThemeColors.pokeYellow, width: 2)),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: MaterialStateProperty.all(ThemeColors.pokeYellow),
+            foregroundColor: MaterialStateProperty.all(Colors.black),
+            elevation: MaterialStateProperty.all(8),
+            shadowColor: MaterialStateProperty.all(const Color(0x99FFCB05)),
+            shape: MaterialStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
+          ),
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          bodyMedium: TextStyle(color: ThemeColors.accentMuted),
+        ),
       ),
       home: _currentPlayer == null
           ? LoginScreen(onLoginSuccess: _handleLogin)
@@ -79,11 +119,11 @@ class _MainMenuState extends State<MainMenu> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
-    const accentGreen = Color(0xFF6AA972);
-    const lightGreen = Color(0xFFDDECDC);
-    const cardGreen = Color(0xFFF7FAF6);
-    const borderGreen = Color(0xFFCADBC5);
+    const baseGreen = ThemeColors.deepNavy;
+    const accentGreen = ThemeColors.pokeYellow;
+    const lightGreen = ThemeColors.accentMuted;
+    const cardGreen = ThemeColors.cardNavy;
+    const borderGreen = ThemeColors.borderNavy;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: baseGreen,
@@ -99,13 +139,7 @@ class _MainMenuState extends State<MainMenu> {
         onPlayerUpdated: widget.onPlayerUpdated,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF5FAF4), Color(0xFFE8F1E6)],
-          ),
-        ),
+        color: const Color(0xFFF7F9FC),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -117,14 +151,10 @@ class _MainMenuState extends State<MainMenu> {
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF3F6F4F), Color(0xFF6AA972)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: ThemeColors.pokeBlue,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.14),
+                        color: ThemeColors.pokeBlue.withOpacity(0.16),
                         blurRadius: 18,
                         offset: const Offset(0, 10),
                       ),
@@ -133,15 +163,12 @@ class _MainMenuState extends State<MainMenu> {
                   child: Stack(
                     children: [
                       Positioned(
-                        right: -20,
-                        top: -30,
-                        child: Container(
-                          height: 120,
-                          width: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
-                            shape: BoxShape.circle,
-                          ),
+                        right: -10,
+                        top: -18,
+                        child: Icon(
+                          Icons.catching_pokemon,
+                          size: 120,
+                          color: Colors.white.withOpacity(0.06),
                         ),
                       ),
                       Column(
@@ -157,15 +184,14 @@ class _MainMenuState extends State<MainMenu> {
                                   color: Colors.white,
                                   border: Border.all(color: Colors.white.withOpacity(0.8)),
                                 ),
-                                child: const Icon(Icons.shield_moon_outlined,
-                                    color: baseGreen, size: 30),
+                                child: const Icon(Icons.catching_pokemon, color: ThemeColors.pokeRed, size: 30),
                               ),
                               const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: const [
                                   Text(
-                                    'Monster Control Center',
+                                    'Trainer Hub',
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800,
@@ -175,9 +201,9 @@ class _MainMenuState extends State<MainMenu> {
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    'Operate, monitor, and secure your creatures',
+                                    'A colorful base for your monster adventures',
                                     style: TextStyle(
-                                      color: Color(0xFFEAF5EA),
+                                      color: Color(0xFFFFF8E1),
                                       fontSize: 13,
                                     ),
                                   ),
@@ -186,15 +212,7 @@ class _MainMenuState extends State<MainMenu> {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: const [
-                              _Pill(text: 'Control Center', icon: Icons.dashboard_customize),
-                              _Pill(text: '6 actions', icon: Icons.grid_view),
-                              _Pill(text: 'Live telemetry', icon: Icons.insights_outlined),
-                            ],
-                          ),
+                          // removed unclickable pills per UX request
                         ],
                       ),
                     ],
@@ -233,9 +251,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'Add Monsters',
                       subtitle: 'Create new entries',
                       icon: Icons.add_circle_outline,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: ThemeColors.pokeBlue,
+                      background: ThemeColors.pokeBlue,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -248,9 +266,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'Catch Monsters',
                       subtitle: 'Find nearby spawns',
                       icon: Icons.catching_pokemon,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: ThemeColors.pokeRed,
+                      background: ThemeColors.pokeRed,
                       highlight: true,
                       onTap: () {
                         Navigator.of(context).push(
@@ -264,9 +282,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'Edit Monsters',
                       subtitle: 'Update details',
                       icon: Icons.edit_outlined,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: Colors.teal,
+                      background: Colors.teal,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -279,9 +297,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'Delete Monsters',
                       subtitle: 'Clean old data',
                       icon: Icons.delete_outline,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: Colors.deepOrange,
+                      background: Colors.deepOrange,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -294,9 +312,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'View Top Monster Hunters',
                       subtitle: 'Leaderboard',
                       icon: Icons.emoji_events_outlined,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: Colors.purple,
+                      background: Colors.purple,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -309,9 +327,9 @@ class _MainMenuState extends State<MainMenu> {
                       title: 'Show Monster Map',
                       subtitle: 'See hotspots',
                       icon: Icons.map_outlined,
-                      color: baseGreen,
-                      accent: accentGreen,
-                      background: cardGreen,
+                      color: Colors.white,
+                      accent: Colors.green,
+                      background: Colors.green,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -388,22 +406,22 @@ class _MenuCard extends StatelessWidget {
                     width: 46,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: accent.withOpacity(0.15),
+                      color: Colors.white.withOpacity(0.18),
                     ),
-                    child: Icon(icon, color: color, size: 26),
+                    child: Icon(icon, color: Colors.white, size: 26),
                   ),
                   if (highlight)
                     Container(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: accent.withOpacity(0.18),
+                        color: Colors.white.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'Focus',
                         style: TextStyle(
-                          color: color,
+                          color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                         ),
@@ -414,20 +432,21 @@ class _MenuCard extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 title,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  height: 1.15,
+                  letterSpacing: 0.6,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.65),
+                  color: Colors.white.withOpacity(0.95),
                   fontSize: 13,
-                  height: 1.3,
+                  height: 1.25,
                 ),
               ),
             ],
@@ -455,31 +474,27 @@ class _InstancePreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: instanceOn ? Colors.white : const Color(0xFFFFF3F1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderGreen.withOpacity(0.9)),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
             blurRadius: 10,
-            offset: const Offset(0, 5),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 10,
+            height: 58,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: (instanceOn ? accentGreen : Colors.redAccent).withOpacity(0.12),
-            ),
-            child: Icon(
-              instanceOn ? Icons.power : Icons.power_off,
-              color: instanceOn ? baseGreen : Colors.redAccent,
-              size: 22,
+              color: instanceOn ? ThemeColors.pokeYellow : Colors.redAccent,
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
           const SizedBox(width: 12),
@@ -492,15 +507,16 @@ class _InstancePreviewCard extends StatelessWidget {
                     Text(
                       'Instance status',
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black.withOpacity(0.9),
+                        fontWeight: FontWeight.w900,
+                        color: ThemeColors.deepNavy,
+                        fontSize: 16,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: (instanceOn ? accentGreen : Colors.redAccent).withOpacity(0.18),
+                        color: (instanceOn ? ThemeColors.pokeYellow : Colors.redAccent).withOpacity(0.16),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: AnimatedSwitcher(
@@ -509,8 +525,8 @@ class _InstancePreviewCard extends StatelessWidget {
                           instanceOn ? 'Online' : 'Offline',
                           key: ValueKey(instanceOn),
                           style: TextStyle(
-                            color: instanceOn ? baseGreen : Colors.redAccent,
-                            fontWeight: FontWeight.w700,
+                            color: instanceOn ? ThemeColors.deepNavy : Colors.redAccent,
+                            fontWeight: FontWeight.w800,
                             fontSize: 12,
                           ),
                         ),
@@ -518,21 +534,21 @@ class _InstancePreviewCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
                   instanceOn
                       ? 'All systems nominal. Catch flows and monitoring are active.'
                       : 'Paused for maintenance. Reactivate to resume catch and detect.',
                   style: TextStyle(
-                    color: Colors.black.withOpacity(0.7),
-                    fontSize: 12.5,
+                    color: ThemeColors.deepNavy.withOpacity(0.8),
+                    fontSize: 13,
                     height: 1.35,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: Colors.black45),
+          Icon(Icons.chevron_right, color: ThemeColors.deepNavy.withOpacity(0.5)),
         ],
       ),
     );
@@ -564,14 +580,14 @@ class _Pill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF3F6F4F)),
+          Icon(icon, size: 16, color: ThemeColors.deepNavy),
           const SizedBox(width: 6),
           Text(
             text,
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF3F6F4F),
+              color: ThemeColors.deepNavy,
             ),
           ),
         ],
@@ -600,17 +616,21 @@ class _AppDrawer extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           UserAccountsDrawerHeader(
-            decoration: BoxDecoration(color: baseGreen),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [ThemeColors.pokeBlue, ThemeColors.pokeRed]),
+              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+            ),
             currentAccountPicture: const CircleAvatar(
               backgroundColor: Colors.white,
-              child: Icon(Icons.person, color: Colors.black87),
+              child: Icon(Icons.person, color: ThemeColors.deepNavy),
             ),
             accountName: Text(
               currentPlayer.name?.isNotEmpty == true
                   ? currentPlayer.name!
                   : currentPlayer.username,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
             ),
-            accountEmail: Text('Player ID: ${currentPlayer.id}'),
+            accountEmail: Text('Player ID: ${currentPlayer.id}', style: const TextStyle(color: Colors.white70)),
           ),
           ListTile(
             leading: const Icon(Icons.dashboard),

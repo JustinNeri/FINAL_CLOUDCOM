@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:torch_light/torch_light.dart';
+import 'theme.dart';
 
 class CatchMonsterScreen extends StatefulWidget {
   const CatchMonsterScreen({
@@ -287,8 +288,33 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[200],
-      appBar: AppBar(title: const Text('Catch Monsters')),
+      backgroundColor: const Color(0xFFF7F9FC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text('Catch Monsters', style: TextStyle(color: ThemeColors.deepNavy)),
+        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeBlue,
+              child: const Icon(Icons.catching_pokemon, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -304,7 +330,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                 ElevatedButton(
                   onPressed: detecting ? null : detectMonster,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
+                    backgroundColor: ThemeColors.pokeYellow,
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -324,7 +351,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                 ElevatedButton(
                   onPressed: catching ? null : catchMonster,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[700],
+                    backgroundColor: ThemeColors.pokeYellow,
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -413,14 +441,14 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: selected ? Colors.blue[50] : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected ? Colors.blue : Colors.grey[300]!,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: selected ? ThemeColors.pokeYellow.withOpacity(0.12) : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected ? ThemeColors.pokeYellow : Colors.grey[300]!,
+                              ),
                             ),
-                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -446,7 +474,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                                 ),
                               ),
                               if (selected)
-                                const Icon(Icons.check_circle, color: Colors.blue),
+                                Icon(Icons.check_circle, color: ThemeColors.pokeYellow),
                             ],
                           ),
                         ),

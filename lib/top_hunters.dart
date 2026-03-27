@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'package:http/http.dart' as http;
 
 class TopHuntersScreen extends StatefulWidget {
@@ -75,14 +76,34 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('View Top Monster Hunters', style: TextStyle(color: Colors.white)),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text('View Top Monster Hunters', style: TextStyle(color: ThemeColors.deepNavy)),
+        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.emoji_events_outlined, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -93,17 +114,20 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
               const Text('Leaderboard of players by total monster catches.'),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   ElevatedButton.icon(
                     onPressed: loading ? null : _loadTopHunters,
                     icon: loading
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.refresh),
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.refresh, color: Colors.black),
                     label: const Text('Refresh'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: baseGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor: ThemeColors.pokeYellow,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(120, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                   ),
                 ],
@@ -151,29 +175,43 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                           ),
                           child: Row(
                             children: [
-                              if (rank <= 3)
-                                CircleAvatar(
-                                  backgroundColor: _rankColor(rank).withOpacity(0.18),
-                                  child: Text(
-                                    '$rank',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: _rankColor(rank),
+                                  if (rank == 1)
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: const LinearGradient(colors: [ThemeColors.pokeYellow, ThemeColors.pokeBlue]),
+                                        boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.2), blurRadius: 6)],
+                                      ),
+                                      child: const Center(child: Icon(Icons.emoji_events, color: Colors.white)),
+                                    )
+                                  else if (rank == 2)
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.9)),
+                                      child: const Center(child: Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+                                    )
+                                  else if (rank == 3)
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withOpacity(0.9)),
+                                      child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+                                    )
+                                  else
+                                    SizedBox(
+                                      width: 46,
+                                      child: Text(
+                                        '$rank',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: ThemeColors.deepNavy,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                )
-                              else
-                                SizedBox(
-                                  width: 36,
-                                  child: Text(
-                                    '$rank.',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF3F6F4F),
-                                    ),
-                                  ),
-                                ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -191,14 +229,14 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF3F6F4F).withOpacity(0.1),
+                                  color: ThemeColors.deepNavy.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   '${h.totalCatches} catches',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF3F6F4F),
+                                    color: ThemeColors.deepNavy,
                                   ),
                                 ),
                               ),
@@ -220,7 +258,7 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
     if (rank == 1) return const Color(0xFFC49102);
     if (rank == 2) return const Color(0xFF6D7881);
     if (rank == 3) return const Color(0xFFA56A43);
-    return const Color(0xFF3F6F4F);
+    return ThemeColors.deepNavy;
   }
 }
 

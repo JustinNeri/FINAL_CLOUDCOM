@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'theme.dart';
 class AddMonsterScreen extends StatefulWidget {
   const AddMonsterScreen({super.key});
 
@@ -116,15 +117,35 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
     const border = Color(0xFFCBD8C9);
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Add Monster', style: TextStyle(color: Colors.white)),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text('Add Monster', style: TextStyle(color: ThemeColors.deepNavy)),
+        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeRed,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -152,13 +173,15 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
                 onChanged: _onRadiusChanged,
               ),
               const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: border),
-                  ),
-                  height: 260,
+              Container(
+                height: 260,
+                decoration: BoxDecoration(
+                  color: ThemeColors.cardNavy,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ThemeColors.borderNavy, width: 6),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
@@ -177,9 +200,9 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
                         circles: [
                           CircleMarker(
                             point: _selected,
-                            color: baseGreen.withOpacity(0.18),
+                            color: ThemeColors.deepNavy.withOpacity(0.18),
                             borderStrokeWidth: 2,
-                            borderColor: baseGreen.withOpacity(0.5),
+                            borderColor: ThemeColors.deepNavy.withOpacity(0.5),
                             useRadiusInMeter: true,
                             radius: _radiusMeters,
                           ),
@@ -194,7 +217,7 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
                             alignment: Alignment.topCenter,
                             child: const Icon(
                               Icons.location_on,
-                              color: Colors.red,
+                              color: ThemeColors.pokeRed,
                               size: 38,
                             ),
                           ),
@@ -289,7 +312,7 @@ class _LabeledField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF3F6F4F)),
+              borderSide: const BorderSide(color: ThemeColors.pokeYellow),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -315,7 +338,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -326,9 +349,9 @@ class _ActionButton extends StatelessWidget {
           child: Text(label),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: filled ? baseGreen : Colors.white,
-          foregroundColor: filled ? Colors.white : baseGreen,
-          side: const BorderSide(color: baseGreen),
+          backgroundColor: filled ? ThemeColors.pokeYellow : Colors.white,
+          foregroundColor: filled ? Colors.black : ThemeColors.pokeBlue,
+          side: const BorderSide(color: ThemeColors.pokeBlue),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'package:http/http.dart' as http;
 
 import 'auth_models.dart';
@@ -227,7 +228,7 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
     final currentPlayer = players.where((p) => p.id == widget.currentPlayer.id).isNotEmpty
         ? players.firstWhere((p) => p.id == widget.currentPlayer.id)
         : widget.currentPlayer;
@@ -245,6 +246,7 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   ElevatedButton.icon(
                     onPressed: loading ? null : _loadPlayers,
@@ -254,11 +256,14 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Icon(Icons.refresh),
+                        : const Icon(Icons.refresh, color: Colors.black),
                     label: const Text('Refresh'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: baseGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor: ThemeColors.pokeYellow,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(120, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ],

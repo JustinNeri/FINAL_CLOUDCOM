@@ -1,13 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'package:http/http.dart' as http;
 
 class EditMonsterScreen extends StatefulWidget {
-  const EditMonsterScreen({
-    super.key,
-    required this.playerId,
-  });
+  const EditMonsterScreen({super.key, required this.playerId});
 
   final String playerId;
 
@@ -23,9 +21,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   String loadError = '';
   List<_Monster> caughtMonsters = [];
 
-  // Elastic IP base for the PHP APIs
   final String apiBase = 'http://15.224.51.87';
-  // If your PHP file lives in a subfolder, update this path accordingly.
   String get listEndpoint => '$apiBase/get_caught_monsters_api.php';
 
   @override
@@ -42,9 +38,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   }
 
   Future<void> _loadCaughtMonsters() async {
-    final playerId = _playerController.text.trim().isEmpty
-        ? '1'
-        : _playerController.text.trim();
+    final playerId = _playerController.text.trim().isEmpty ? '1' : _playerController.text.trim();
 
     setState(() {
       loadingList = true;
@@ -62,18 +56,14 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
           setState(() => loadError = 'Server message: $serverMsg');
           return;
         }
-        setState(() {
-          caughtMonsters = parsed;
-        });
+        setState(() => caughtMonsters = parsed);
       } else {
         setState(() => loadError = 'Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
       }
     } catch (e) {
       setState(() => loadError = 'Request failed: $e');
     } finally {
-      if (mounted) {
-        setState(() => loadingList = false);
-      }
+      if (mounted) setState(() => loadingList = false);
     }
   }
 
@@ -84,9 +74,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
       return;
     }
 
-    setState(() {
-      submitting = true;
-    });
+    setState(() => submitting = true);
 
     final url = Uri.parse('$apiBase/edit_monster_api.php');
     final body = {
@@ -99,10 +87,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
     try {
       final resp = await http.post(url, body: body).timeout(const Duration(seconds: 10));
       if (resp.statusCode == 200) {
-        const feedback = 'Edit Succesfully';
-        _show(feedback);
-
-        // Update list locally for quick feedback
+        _show('Edit Successfully');
         setState(() {
           caughtMonsters = caughtMonsters.map((m) {
             if (m.catchId == monster.catchId) {
@@ -117,9 +102,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
     } catch (e) {
       _show('Request failed: $e');
     } finally {
-      if (mounted) {
-        setState(() => submitting = false);
-      }
+      if (mounted) setState(() => submitting = false);
     }
   }
 
@@ -130,23 +113,15 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-          ),
+          padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit ${monster.name ?? 'Monster'} (#${monster.monsterId})',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              Text('Edit ${monster.name ?? 'Monster'} (#${monster.monsterId})', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               const SizedBox(height: 12),
               _Field(label: 'Monster Name', controller: nameCtrl),
               const SizedBox(height: 10),
@@ -161,18 +136,9 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
                           Navigator.of(ctx).pop();
                           await _editMonster(monster, nameCtrl.text, typeCtrl.text);
                         },
-                  icon: submitting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.save_outlined),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Save Changes'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3F6F4F),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                  icon: submitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) : const Icon(Icons.save_outlined, color: Colors.black),
+                  label: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Save Changes')),
+                  style: ElevatedButton.styleFrom(backgroundColor: ThemeColors.pokeYellow, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 ),
               ),
             ],
@@ -189,14 +155,34 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Edit Monsters', style: TextStyle(color: Colors.white)),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text('Edit Monsters', style: TextStyle(color: ThemeColors.deepNavy)),
+        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeRed,
+              child: const Icon(Icons.edit_outlined, color: Colors.white),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -207,26 +193,22 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
               const Text('Caught monsters for this player. Tap edit to change name or type.'),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: _Field(
-                      label: 'Player ID',
-                      controller: _playerController,
-                      keyboard: TextInputType.number,
-                      readOnly: true,
-                    ),
+                    child: _Field(label: 'Player ID', controller: _playerController, keyboard: TextInputType.number, readOnly: true),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton.icon(
                     onPressed: loadingList ? null : _loadCaughtMonsters,
-                    icon: loadingList
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.refresh),
+                    icon: loadingList ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.refresh, color: Colors.black),
                     label: const Text('Refresh'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: baseGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor: ThemeColors.pokeYellow,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(120, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                   ),
                 ],
@@ -236,27 +218,18 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.red[200]!),
-                  ),
+                  decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red[200]!)),
                   child: Text(loadError),
                 ),
               if (loadingList)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
+                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: CircularProgressIndicator())),
               if (!loadingList && loadError.isEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Caught Monsters (${caughtMonsters.length})',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text('Caught Monsters (${caughtMonsters.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    if (caughtMonsters.isEmpty)
-                      const Text('No caught monsters yet.'),
+                    if (caughtMonsters.isEmpty) const Text('No caught monsters yet.'),
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -266,11 +239,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
                         final m = caughtMonsters[index];
                         return Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[300]!)),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -278,23 +247,13 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      m.name ?? 'Monster ${m.monsterId}',
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
-                                    ),
+                                    Text(m.name ?? 'Monster ${m.monsterId}', style: const TextStyle(fontWeight: FontWeight.w700)),
                                     const SizedBox(height: 6),
                                     Text(m.type ?? 'Unknown type', style: const TextStyle(color: Colors.black87)),
                                   ],
                                 ),
                               ),
-                              TextButton.icon(
-                                onPressed: submitting ? null : () => _openEditSheet(m),
-                                icon: const Icon(Icons.edit_outlined),
-                                label: const Text('Edit'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: baseGreen,
-                                ),
-                              ),
+                              ElevatedButton.icon(onPressed: submitting ? null : () => _openEditSheet(m), icon: const Icon(Icons.edit_outlined), label: const Text('Edit'), style: TextButton.styleFrom(foregroundColor: baseGreen)),
                             ],
                           ),
                         );
@@ -310,39 +269,8 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   }
 }
 
-String _shortBody(String body) {
-  final clean = body.trim();
-  if (clean.isEmpty) return '(empty response body)';
-  if (clean.length <= 240) return clean;
-  return '${clean.substring(0, 240)}...';
-}
-
-String? _extractServerMessage(String body) {
-  try {
-    final data = json.decode(body);
-    if (data is Map<String, dynamic>) {
-      final err = data['error']?.toString();
-      if (err != null && err.trim().isNotEmpty) return err;
-      final msg = data['message']?.toString();
-      if (msg != null && msg.trim().isNotEmpty) return msg;
-    }
-  } catch (_) {
-    // Ignore parse errors and fallback to generic handling.
-  }
-  return null;
-}
-
 class _Monster {
-  _Monster({
-    required this.catchId,
-    required this.monsterId,
-    this.name,
-    this.type,
-    this.lat,
-    this.lon,
-    this.radius,
-    this.caughtAt,
-  });
+  _Monster({required this.catchId, required this.monsterId, this.name, this.type, this.lat, this.lon, this.radius, this.caughtAt});
 
   final String catchId;
   final String monsterId;
@@ -354,16 +282,7 @@ class _Monster {
   final String? caughtAt;
 
   _Monster copyWith({String? name, String? type}) {
-    return _Monster(
-      catchId: catchId,
-      monsterId: monsterId,
-      name: name ?? this.name,
-      type: type ?? this.type,
-      lat: lat,
-      lon: lon,
-      radius: radius,
-      caughtAt: caughtAt,
-    );
+    return _Monster(catchId: catchId, monsterId: monsterId, name: name ?? this.name, type: type ?? this.type, lat: lat, lon: lon, radius: radius, caughtAt: caughtAt);
   }
 
   factory _Monster.fromMap(Map<String, dynamic> map) {
@@ -391,23 +310,36 @@ List<_Monster> _parseList(String body) {
     } else {
       return [];
     }
-    return list
-        .whereType<Map>()
-        .map((m) => _Monster.fromMap(Map<String, dynamic>.from(m)))
-      .where((m) => m.catchId.isNotEmpty)
-        .toList();
+    return list.whereType<Map>().map((m) => _Monster.fromMap(Map<String, dynamic>.from(m))).where((m) => m.catchId.isNotEmpty).toList();
   } catch (_) {
     return [];
   }
 }
 
+String _shortBody(String body) {
+  final clean = body.trim();
+  if (clean.isEmpty) return '(empty response body)';
+  if (clean.length <= 240) return clean;
+  return '${clean.substring(0, 240)}...';
+}
+
+String? _extractServerMessage(String body) {
+  try {
+    final data = json.decode(body);
+    if (data is Map<String, dynamic>) {
+      final err = data['error']?.toString();
+      if (err != null && err.trim().isNotEmpty) return err;
+      final msg = data['message']?.toString();
+      if (msg != null && msg.trim().isNotEmpty) return msg;
+    }
+  } catch (_) {
+    // Ignore parse errors and fallback to generic handling.
+  }
+  return null;
+}
+
 class _Field extends StatelessWidget {
-  const _Field({
-    required this.label,
-    required this.controller,
-    this.keyboard,
-    this.readOnly = false,
-  });
+  const _Field({required this.label, required this.controller, this.keyboard, this.readOnly = false});
 
   final String label;
   final TextEditingController controller;
@@ -429,14 +361,8 @@ class _Field extends StatelessWidget {
           decoration: InputDecoration(
             hintText: label,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: borderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF3F6F4F)),
-            ),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderColor)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: ThemeColors.pokeYellow)),
             filled: true,
             fillColor: Colors.white,
           ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'package:http/http.dart' as http;
 
 class DeleteMonsterScreen extends StatefulWidget {
@@ -141,14 +142,34 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = Color(0xFF3F6F4F);
+    const baseGreen = ThemeColors.deepNavy;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Delete Monsters', style: TextStyle(color: Colors.white)),
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text('Delete Monsters', style: TextStyle(color: ThemeColors.deepNavy)),
+        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
+              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
+            ),
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: CircleAvatar(
+              backgroundColor: Colors.deepOrange,
+              child: const Icon(Icons.delete_outline, color: Colors.white),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -159,6 +180,7 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
               const Text('Caught monsters for this player. Tap delete to remove a monster.'),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: _Field(
@@ -172,13 +194,15 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
                   ElevatedButton.icon(
                     onPressed: loadingList ? null : _loadCaughtMonsters,
                     icon: loadingList
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.refresh),
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.refresh, color: Colors.black),
                     label: const Text('Refresh'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: baseGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor: ThemeColors.pokeYellow,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(120, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                   ),
                 ],
@@ -362,7 +386,7 @@ class _Field extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF3F6F4F)),
+              borderSide: const BorderSide(color: ThemeColors.deepNavy),
             ),
             filled: true,
             fillColor: Colors.white,
