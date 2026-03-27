@@ -82,8 +82,23 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
     }
   }
 
+  Future<void> _playCatchSuccessCue() async {
+    // Play a short ascending cue to mimic a classic capture success sound.
+    try {
+      await SystemSound.play(SystemSoundType.click);
+      await Future.delayed(const Duration(milliseconds: 120));
+      await SystemSound.play(SystemSoundType.click);
+      await Future.delayed(const Duration(milliseconds: 140));
+      await SystemSound.play(SystemSoundType.alert);
+      await HapticFeedback.heavyImpact();
+    } catch (_) {
+      // Ignore sound/haptic failures on unsupported devices.
+    }
+  }
+
   Future<void> _syncCaughtIdsFromServer() async {
-    final url = Uri.parse("$apiBase/get_caught_monsters_api.php?player_id=${widget.playerId}");
+    final url = Uri.parse(
+        "$apiBase/get_caught_monsters_api.php?player_id=${widget.playerId}");
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200 || response.body.isEmpty) return;
@@ -184,12 +199,10 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
             }
 
             // Filter out already-caught monsters client-side
-            items = items
-                .where((m) {
-                  final id = int.tryParse(m["monster_id"].toString());
-                  return id == null || !caughtIds.contains(id);
-                })
-                .toList();
+            items = items.where((m) {
+              final id = int.tryParse(m["monster_id"].toString());
+              return id == null || !caughtIds.contains(id);
+            }).toList();
 
             if (items.isNotEmpty) {
               nearby = items;
@@ -244,9 +257,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
     };
 
     try {
-      final response = await http
-          .post(url, body: body)
-          .timeout(const Duration(seconds: 10));
+      final response =
+          await http.post(url, body: body).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         setState(() {
           catchMessage =
@@ -275,6 +287,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
             detectMessage = "No monster selected";
           }
         });
+        unawaited(_playCatchSuccessCue());
       } else {
         setState(() => error = "Catch failed: ${response.statusCode}");
       }
@@ -292,9 +305,11 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 2,
-        title: const Text('Catch Monsters', style: TextStyle(color: ThemeColors.deepNavy)),
+        title: const Text('Catch Monsters',
+            style: TextStyle(color: ThemeColors.deepNavy)),
         iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
           child: GestureDetector(
@@ -324,9 +339,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                 const SizedBox(height: 10),
                 buildField("Your Latitude", latitude),
                 buildField("Your Longitude", longitude),
-
                 const SizedBox(height: 10),
-
                 ElevatedButton(
                   onPressed: detecting ? null : detectMonster,
                   style: ElevatedButton.styleFrom(
@@ -345,9 +358,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                         )
                       : const Text("Detect Monsters"),
                 ),
-
                 const SizedBox(height: 12),
-
                 ElevatedButton(
                   onPressed: catching ? null : catchMonster,
                   style: ElevatedButton.styleFrom(
@@ -366,9 +377,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                         )
                       : const Text("Catch Monster"),
                 ),
-
                 const SizedBox(height: 20),
-
                 if (error.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -378,7 +387,6 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                     ),
                     child: Text(error, textAlign: TextAlign.center),
                   ),
-
                 if (detectMessage.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(15),
@@ -391,7 +399,6 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-
                 if (catchMessage.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(top: 12),
@@ -405,7 +412,6 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-
                 if (nearby.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Align(
@@ -430,7 +436,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                       final type = m["monster_type"]?.toString();
                       final distance = m["distance"]?.toString();
                       final id = int.tryParse(m["monster_id"].toString());
-                      final selected = detectedMonsterId != null && id == detectedMonsterId;
+                      final selected =
+                          detectedMonsterId != null && id == detectedMonsterId;
                       return GestureDetector(
                         onTap: () {
                           setState(() {
@@ -441,14 +448,18 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                           });
                         },
                         child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: selected ? ThemeColors.pokeYellow.withOpacity(0.12) : Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: selected ? ThemeColors.pokeYellow : Colors.grey[300]!,
-                              ),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? ThemeColors.pokeYellow.withOpacity(0.12)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? ThemeColors.pokeYellow
+                                  : Colors.grey[300]!,
                             ),
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -474,7 +485,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                                 ),
                               ),
                               if (selected)
-                                Icon(Icons.check_circle, color: ThemeColors.pokeYellow),
+                                Icon(Icons.check_circle,
+                                    color: ThemeColors.pokeYellow),
                             ],
                           ),
                         ),
