@@ -47,6 +47,8 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
 
       if (response.statusCode == 200) {
         _showStub(response.body);
+        if (!mounted) return;
+        Navigator.of(context).pop();
       } else {
         _showStub("Failed to save monster");
       }
