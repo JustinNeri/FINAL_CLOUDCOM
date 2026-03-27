@@ -250,18 +250,6 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
               ),
               const SizedBox(height: 12),
               _ActionButton(
-                label: 'Capture Photo',
-                icon: Icons.photo_camera_outlined,
-                onPressed: () => _showStub('Capture Photo tapped'),
-              ),
-              const SizedBox(height: 10),
-              _ActionButton(
-                label: 'Pick from Gallery',
-                icon: Icons.photo_library_outlined,
-                onPressed: () => _showStub('Pick from Gallery tapped'),
-              ),
-              const SizedBox(height: 10),
-              _ActionButton(
                 label: 'Save Monster',
                 icon: Icons.save_outlined,
                 onPressed: _saveMonster,

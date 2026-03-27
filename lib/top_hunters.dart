@@ -5,7 +5,9 @@ import 'theme.dart';
 import 'package:http/http.dart' as http;
 
 class TopHuntersScreen extends StatefulWidget {
-  const TopHuntersScreen({super.key});
+  const TopHuntersScreen({super.key, this.currentPlayerId});
+
+  final String? currentPlayerId;
 
   @override
   State<TopHuntersScreen> createState() => _TopHuntersScreenState();
@@ -164,63 +166,87 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                       itemCount: hunters.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
-                        final h = hunters[index];
-                        final rank = index + 1;
+                                            final h = hunters[index];
+                                            final rank = index + 1;
+                                            final ownerId = widget.currentPlayerId?.trim();
+                                            final hunterId = h.playerId.trim();
+                                            final isOwner = ownerId != null && ownerId.isNotEmpty && ownerId == hunterId;
                         return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: isOwner ? ThemeColors.pokeYellow : Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: isOwner ? ThemeColors.pokeYellow.withOpacity(0.9) : Colors.grey[300]!, width: isOwner ? 1.6 : 1.0),
+                                                boxShadow: isOwner ? [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.16), blurRadius: 14, offset: const Offset(0,6))] : null,
+                                              ),
                           child: Row(
                             children: [
-                                  if (rank == 1)
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: const LinearGradient(colors: [ThemeColors.pokeYellow, ThemeColors.pokeBlue]),
-                                        boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.2), blurRadius: 6)],
-                                      ),
-                                      child: const Center(child: Icon(Icons.emoji_events, color: Colors.white)),
-                                    )
-                                  else if (rank == 2)
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.9)),
-                                      child: const Center(child: Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
-                                    )
-                                  else if (rank == 3)
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withOpacity(0.9)),
-                                      child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
-                                    )
-                                  else
-                                    SizedBox(
-                                      width: 46,
-                                      child: Text(
-                                        '$rank',
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: ThemeColors.deepNavy,
-                                        ),
-                                      ),
-                                    ),
+                                                      if (rank == 1)
+                                                        Container(
+                                                          width: 46,
+                                                          height: 46,
+                                                          decoration: BoxDecoration(
+                                                            shape: BoxShape.circle,
+                                                            gradient: const LinearGradient(colors: [ThemeColors.pokeYellow, ThemeColors.pokeBlue]),
+                                                            boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.2), blurRadius: 6)],
+                                                          ),
+                                                          child: const Center(child: Icon(Icons.emoji_events, color: Colors.white)),
+                                                        )
+                                                      else if (rank == 2)
+                                                        Container(
+                                                          width: 46,
+                                                          height: 46,
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.9)),
+                                                          child: const Center(child: Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+                                                        )
+                                                      else if (rank == 3)
+                                                        Container(
+                                                          width: 46,
+                                                          height: 46,
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withOpacity(0.9)),
+                                                          child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
+                                                        )
+                                                      else
+                                                        Container(
+                                                          width: 46,
+                                                          height: 46,
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.08)),
+                                                          child: Center(
+                                                            child: Text(
+                                                              '$rank',
+                                                              textAlign: TextAlign.center,
+                                                              style: const TextStyle(
+                                                                fontWeight: FontWeight.w700,
+                                                                color: ThemeColors.deepNavy,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      h.playerName ?? 'Player ${h.playerId}',
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
-                                    ),
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                h.playerName ?? 'Player ${h.playerId}',
+                                                                style: TextStyle(fontWeight: FontWeight.w800, color: ThemeColors.deepNavy),
+                                                              ),
+                                                            ),
+                                                            if (isOwner)
+                                                              Container(
+                                                                margin: const EdgeInsets.only(left: 8),
+                                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                                decoration: BoxDecoration(
+                                                                  color: ThemeColors.pokeYellow,
+                                                                  borderRadius: BorderRadius.circular(12),
+                                                                ),
+                                                                child: const Text('You', style: TextStyle(fontWeight: FontWeight.w800)),
+                                                              ),
+                                                          ],
+                                                        ),
                                     const SizedBox(height: 4),
                                     Text('Player ID: ${h.playerId}'),
                                   ],

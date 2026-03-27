@@ -11,6 +11,8 @@ import 'login_screen.dart';
 import 'player_accounts_screen.dart';
 import 'auth_models.dart';
 import 'theme.dart';
+import 'about_us.dart';
+import 'privacy_policy.dart';
 
 void main() {
   runApp(const MyApp());
@@ -318,7 +320,7 @@ class _MainMenuState extends State<MainMenu> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const TopHuntersScreen(),
+                            builder: (_) => TopHuntersScreen(currentPlayerId: widget.currentPlayer.id),
                           ),
                         );
                       },
@@ -620,8 +622,8 @@ class _AppDrawer extends StatelessWidget {
               gradient: LinearGradient(colors: [ThemeColors.pokeBlue, ThemeColors.pokeRed]),
               borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
             ),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: ThemeColors.pokeYellow,
               child: Icon(Icons.person, color: ThemeColors.deepNavy),
             ),
             accountName: Text(
@@ -686,7 +688,7 @@ class _AppDrawer extends StatelessWidget {
               Navigator.pop(context);
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const TopHuntersScreen(),
+                  builder: (_) => TopHuntersScreen(currentPlayerId: currentPlayer.id),
                 ),
               );
             },
@@ -726,6 +728,30 @@ class _AppDrawer extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => ShowMonsterMapScreen(playerId: currentPlayer.id),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.info, color: Colors.grey),
+            title: const Text('About Us'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AboutUsScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip, color: Colors.grey),
+            title: const Text('Privacy Policy'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PrivacyPolicyScreen(),
                 ),
               );
             },
