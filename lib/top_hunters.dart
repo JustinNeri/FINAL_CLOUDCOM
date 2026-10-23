@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'api.dart';
 import 'theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -14,7 +15,6 @@ class TopHuntersScreen extends StatefulWidget {
 }
 
 class _TopHuntersScreenState extends State<TopHuntersScreen> {
-  final String apiBase = 'http://100.69.77.17';
 
   bool loading = false;
   String error = '';
@@ -52,6 +52,7 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
       }
     }
 
+    if (!mounted) return;
     if (successResp == null) {
       setState(() {
         loading = false;
@@ -78,8 +79,6 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -176,8 +175,8 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                                               decoration: BoxDecoration(
                                                 color: isOwner ? ThemeColors.pokeYellow : Colors.white,
                                                 borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(color: isOwner ? ThemeColors.pokeYellow.withOpacity(0.9) : Colors.grey[300]!, width: isOwner ? 1.6 : 1.0),
-                                                boxShadow: isOwner ? [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.16), blurRadius: 14, offset: const Offset(0,6))] : null,
+                                                border: Border.all(color: isOwner ? ThemeColors.pokeYellow.withValues(alpha: 0.9) : Colors.grey[300]!, width: isOwner ? 1.6 : 1.0),
+                                                boxShadow: isOwner ? [BoxShadow(color: ThemeColors.pokeYellow.withValues(alpha: 0.16), blurRadius: 14, offset: const Offset(0,6))] : null,
                                               ),
                           child: Row(
                             children: [
@@ -188,7 +187,7 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                                                           decoration: BoxDecoration(
                                                             shape: BoxShape.circle,
                                                             gradient: const LinearGradient(colors: [ThemeColors.pokeYellow, ThemeColors.pokeBlue]),
-                                                            boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withOpacity(0.2), blurRadius: 6)],
+                                                            boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withValues(alpha: 0.2), blurRadius: 6)],
                                                           ),
                                                           child: const Center(child: Icon(Icons.emoji_events, color: Colors.white)),
                                                         )
@@ -196,21 +195,21 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                                                         Container(
                                                           width: 46,
                                                           height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.9)),
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withValues(alpha: 0.9)),
                                                           child: const Center(child: Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
                                                         )
                                                       else if (rank == 3)
                                                         Container(
                                                           width: 46,
                                                           height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withOpacity(0.9)),
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withValues(alpha: 0.9)),
                                                           child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
                                                         )
                                                       else
                                                         Container(
                                                           width: 46,
                                                           height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withOpacity(0.08)),
+                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withValues(alpha: 0.08)),
                                                           child: Center(
                                                             child: Text(
                                                               '$rank',
@@ -255,7 +254,7 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: ThemeColors.deepNavy.withOpacity(0.1),
+                                  color: ThemeColors.deepNavy.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -278,13 +277,6 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
         ),
       ),
     );
-  }
-
-  Color _rankColor(int rank) {
-    if (rank == 1) return const Color(0xFFC49102);
-    if (rank == 2) return const Color(0xFF6D7881);
-    if (rank == 3) return const Color(0xFFA56A43);
-    return ThemeColors.deepNavy;
   }
 }
 

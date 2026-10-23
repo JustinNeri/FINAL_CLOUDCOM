@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'api.dart';
 import 'theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -21,7 +22,6 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   String loadError = '';
   List<_Monster> caughtMonsters = [];
 
-  final String apiBase = 'http://100.69.77.17';
   String get listEndpoint => '$apiBase/get_caught_monsters_api.php';
 
   @override
@@ -49,6 +49,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
 
     try {
       final resp = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (resp.statusCode == 200) {
         final parsed = _parseList(resp.body);
         final serverMsg = _extractServerMessage(resp.body);
@@ -61,7 +62,7 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
         setState(() => loadError = 'Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
       }
     } catch (e) {
-      setState(() => loadError = 'Request failed: $e');
+      if (mounted) setState(() => loadError = 'Request failed: $e');
     } finally {
       if (mounted) setState(() => loadingList = false);
     }
@@ -86,7 +87,13 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
 
     try {
       final resp = await http.post(url, body: body).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (resp.statusCode == 200) {
+        final serverError = responseError(resp.body);
+        if (serverError != null) {
+          _show('Edit failed: $serverError');
+          return;
+        }
         _show('Edit Successfully');
         setState(() {
           caughtMonsters = caughtMonsters.map((m) {
@@ -109,39 +116,49 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   void _openEditSheet(_Monster monster) {
     final nameCtrl = TextEditingController(text: monster.name ?? '');
     final typeCtrl = TextEditingController(text: monster.type ?? '');
+    String? sheetError;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Edit ${monster.name ?? 'Monster'} (#${monster.monsterId})', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-              const SizedBox(height: 12),
-              _Field(label: 'Monster Name', controller: nameCtrl),
-              const SizedBox(height: 10),
-              _Field(label: 'Monster Type', controller: typeCtrl),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: submitting
-                      ? null
-                      : () async {
-                          Navigator.of(ctx).pop();
-                          await _editMonster(monster, nameCtrl.text, typeCtrl.text);
-                        },
-                  icon: submitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) : const Icon(Icons.save_outlined, color: Colors.black),
-                  label: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Save Changes')),
-                  style: ElevatedButton.styleFrom(backgroundColor: ThemeColors.pokeYellow, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) => Padding(
+            padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Edit ${monster.name ?? 'Monster'} (#${monster.monsterId})', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                const SizedBox(height: 12),
+                _Field(label: 'Monster Name', controller: nameCtrl),
+                const SizedBox(height: 10),
+                _Field(label: 'Monster Type', controller: typeCtrl),
+                if (sheetError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(sheetError!, style: const TextStyle(color: Colors.red)),
+                  ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      if (nameCtrl.text.trim().isEmpty && typeCtrl.text.trim().isEmpty) {
+                        setSheetState(() => sheetError = 'Enter a new name or type.');
+                        return;
+                      }
+                      Navigator.of(ctx).pop();
+                      await _editMonster(monster, nameCtrl.text, typeCtrl.text);
+                    },
+                    icon: const Icon(Icons.save_outlined, color: Colors.black),
+                    label: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Save Changes')),
+                    style: ElevatedButton.styleFrom(backgroundColor: ThemeColors.pokeYellow, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'api.dart';
 import 'theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -24,7 +25,6 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
   String loadError = '';
   List<_Monster> caughtMonsters = [];
 
-  final String apiBase = 'http://100.69.77.17';
   String get listEndpoint => '$apiBase/get_caught_monsters_api.php';
 
   @override
@@ -54,6 +54,7 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
 
     try {
       final resp = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (resp.statusCode == 200) {
         final parsed = _parseList(resp.body);
         final serverMsg = _extractServerMessage(resp.body);
@@ -68,7 +69,7 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
         setState(() => loadError = 'Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
       }
     } catch (e) {
-      setState(() => loadError = 'Request failed: $e');
+      if (mounted) setState(() => loadError = 'Request failed: $e');
     } finally {
       if (mounted) {
         setState(() => loadingList = false);
@@ -92,7 +93,13 @@ class _DeleteMonsterScreenState extends State<DeleteMonsterScreen> {
 
     try {
       final resp = await http.post(url, body: body).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (resp.statusCode == 200) {
+        final serverError = responseError(resp.body);
+        if (serverError != null) {
+          _show('Delete failed: $serverError');
+          return;
+        }
         _show('Delete Successfully');
         setState(() {
           caughtMonsters.removeWhere((m) => m.catchId == monster.catchId);

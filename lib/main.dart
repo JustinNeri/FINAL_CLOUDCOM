@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'add_monster.dart';
 import 'catch_monster.dart';
-import 'instance_toggle.dart';
 import 'instance_screen.dart';
 import 'edit_monster.dart';
 import 'delete_monster.dart';
@@ -76,12 +75,12 @@ class _MyAppState extends State<MyApp> {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ButtonStyle(
-            backgroundColor: MaterialStateProperty.all(ThemeColors.pokeYellow),
-            foregroundColor: MaterialStateProperty.all(Colors.black),
-            elevation: MaterialStateProperty.all(8),
-            shadowColor: MaterialStateProperty.all(const Color(0x99FFCB05)),
-            shape: MaterialStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
+            backgroundColor: WidgetStateProperty.all(ThemeColors.pokeYellow),
+            foregroundColor: WidgetStateProperty.all(Colors.black),
+            elevation: WidgetStateProperty.all(8),
+            shadowColor: WidgetStateProperty.all(const Color(0x99FFCB05)),
+            shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
           ),
         ),
         textTheme: const TextTheme(
@@ -117,14 +116,13 @@ class MainMenu extends StatefulWidget {
 }
 
 class _MainMenuState extends State<MainMenu> {
-  bool instanceOn = true;
+  /// Null until the instance screen has reported the real status.
+  bool? instanceOn;
 
   @override
   Widget build(BuildContext context) {
     const baseGreen = ThemeColors.deepNavy;
     const accentGreen = ThemeColors.pokeYellow;
-    const lightGreen = ThemeColors.accentMuted;
-    const cardGreen = ThemeColors.cardNavy;
     const borderGreen = ThemeColors.borderNavy;
     return Scaffold(
       appBar: AppBar(
@@ -156,7 +154,7 @@ class _MainMenuState extends State<MainMenu> {
                     color: ThemeColors.pokeBlue,
                     boxShadow: [
                       BoxShadow(
-                        color: ThemeColors.pokeBlue.withOpacity(0.16),
+                        color: ThemeColors.pokeBlue.withValues(alpha: 0.16),
                         blurRadius: 18,
                         offset: const Offset(0, 10),
                       ),
@@ -170,7 +168,7 @@ class _MainMenuState extends State<MainMenu> {
                         child: Icon(
                           Icons.catching_pokemon,
                           size: 120,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha: 0.06),
                         ),
                       ),
                       Column(
@@ -184,7 +182,7 @@ class _MainMenuState extends State<MainMenu> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: Colors.white,
-                                  border: Border.all(color: Colors.white.withOpacity(0.8)),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
                                 ),
                                 child: const Icon(Icons.catching_pokemon, color: ThemeColors.pokeRed, size: 30),
                               ),
@@ -225,7 +223,7 @@ class _MainMenuState extends State<MainMenu> {
                   onTap: () async {
                     final result = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
-                        builder: (_) => InstanceScreen(initialStatus: instanceOn),
+                        builder: (_) => InstanceScreen(initialStatus: instanceOn ?? false),
                       ),
                     );
                     if (result != null) {
@@ -349,12 +347,6 @@ class _MainMenuState extends State<MainMenu> {
       ),
     );
   }
-
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Coming soon')),
-    );
-  }
 }
 
 class _MenuCard extends StatelessWidget {
@@ -386,10 +378,10 @@ class _MenuCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: background,
-          border: Border.all(color: Colors.black.withOpacity(0.04)),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 6),
             ),
@@ -408,7 +400,7 @@ class _MenuCard extends StatelessWidget {
                     width: 46,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.18),
+                      color: Colors.white.withValues(alpha: 0.18),
                     ),
                     child: Icon(icon, color: Colors.white, size: 26),
                   ),
@@ -417,7 +409,7 @@ class _MenuCard extends StatelessWidget {
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
+                        color: Colors.white.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -446,7 +438,7 @@ class _MenuCard extends StatelessWidget {
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.95),
+                  color: Colors.white.withValues(alpha: 0.95),
                   fontSize: 13,
                   height: 1.25,
                 ),
@@ -467,23 +459,39 @@ class _InstancePreviewCard extends StatelessWidget {
     required this.borderGreen,
   });
 
-  final bool instanceOn;
+  final bool? instanceOn;
   final Color baseGreen;
   final Color accentGreen;
   final Color borderGreen;
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = switch (instanceOn) {
+      true => ThemeColors.pokeYellow,
+      false => Colors.redAccent,
+      null => ThemeColors.accentMuted,
+    };
+    final statusLabel = switch (instanceOn) {
+      true => 'Online',
+      false => 'Offline',
+      null => 'Unknown',
+    };
+    final statusText = switch (instanceOn) {
+      true => 'All systems nominal. Catch flows and monitoring are active.',
+      false => 'Paused for maintenance. Reactivate to resume catch and detect.',
+      null => 'Status not checked yet. Tap to check the instance.',
+    };
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
@@ -495,7 +503,7 @@ class _InstancePreviewCard extends StatelessWidget {
             width: 10,
             height: 58,
             decoration: BoxDecoration(
-              color: instanceOn ? ThemeColors.pokeYellow : Colors.redAccent,
+              color: statusColor,
               borderRadius: BorderRadius.circular(8),
             ),
           ),
@@ -518,16 +526,16 @@ class _InstancePreviewCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: (instanceOn ? ThemeColors.pokeYellow : Colors.redAccent).withOpacity(0.16),
+                        color: statusColor.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
                         child: Text(
-                          instanceOn ? 'Online' : 'Offline',
+                          statusLabel,
                           key: ValueKey(instanceOn),
                           style: TextStyle(
-                            color: instanceOn ? ThemeColors.deepNavy : Colors.redAccent,
+                            color: instanceOn == false ? Colors.redAccent : ThemeColors.deepNavy,
                             fontWeight: FontWeight.w800,
                             fontSize: 12,
                           ),
@@ -538,11 +546,9 @@ class _InstancePreviewCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  instanceOn
-                      ? 'All systems nominal. Catch flows and monitoring are active.'
-                      : 'Paused for maintenance. Reactivate to resume catch and detect.',
+                  statusText,
                   style: TextStyle(
-                    color: ThemeColors.deepNavy.withOpacity(0.8),
+                    color: ThemeColors.deepNavy.withValues(alpha: 0.8),
                     fontSize: 13,
                     height: 1.35,
                   ),
@@ -550,48 +556,7 @@ class _InstancePreviewCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: ThemeColors.deepNavy.withOpacity(0.5)),
-        ],
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.text, required this.icon});
-
-  final String text;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: ThemeColors.deepNavy),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: ThemeColors.deepNavy,
-            ),
-          ),
+          Icon(Icons.chevron_right, color: ThemeColors.deepNavy.withValues(alpha: 0.5)),
         ],
       ),
     );

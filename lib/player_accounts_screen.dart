@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'api.dart';
 import 'theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -21,7 +22,6 @@ class PlayerAccountsScreen extends StatefulWidget {
 }
 
 class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
-  final String apiBase = 'http://100.69.77.17';
 
   bool loading = false;
   String error = '';
@@ -87,7 +87,7 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
         error = '';
       });
     } catch (e) {
-      setState(() => error = 'Request failed: $e');
+      if (mounted) setState(() => error = 'Request failed: $e');
     } finally {
       if (mounted) {
         setState(() => loading = false);
@@ -96,55 +96,18 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
   }
 
   Future<void> _openEditDialog(PlayerProfile profile) async {
-    final usernameCtrl = TextEditingController(text: profile.username);
-    final nameCtrl = TextEditingController(text: profile.name ?? '');
-    final passwordCtrl = TextEditingController();
-
     await showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Update Player'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _DialogField(label: 'Username', controller: usernameCtrl),
-                _DialogField(label: 'Player Name', controller: nameCtrl),
-                _DialogField(
-                  label: 'New Password (optional)',
-                  controller: passwordCtrl,
-                  obscureText: true,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final ok = await _updatePlayer(
-                  playerId: profile.id,
-                  username: usernameCtrl.text.trim(),
-                  playerName: nameCtrl.text.trim(),
-                  password: passwordCtrl.text,
-                );
-                if (!mounted) return;
-                if (ok) Navigator.of(ctx).pop();
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _EditPlayerDialog(
+        profile: profile,
+        onSave: (username, playerName, password) => _updatePlayer(
+          playerId: profile.id,
+          username: username,
+          playerName: playerName,
+          password: password,
+        ),
+      ),
     );
-
-    usernameCtrl.dispose();
-    nameCtrl.dispose();
-    passwordCtrl.dispose();
   }
 
   Future<bool> _updatePlayer({
@@ -171,6 +134,16 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
       ).timeout(const Duration(seconds: 10));
 
       if (resp.statusCode == 200) {
+        final serverError = responseError(resp.body);
+        if (serverError != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Update failed: $serverError')),
+            );
+          }
+          return false;
+        }
+
         int? affectedRows;
         try {
           final data = json.decode(resp.body);
@@ -325,6 +298,88 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EditPlayerDialog extends StatefulWidget {
+  const _EditPlayerDialog({required this.profile, required this.onSave});
+
+  final PlayerProfile profile;
+  final Future<bool> Function(String username, String playerName, String password) onSave;
+
+  @override
+  State<_EditPlayerDialog> createState() => _EditPlayerDialogState();
+}
+
+class _EditPlayerDialogState extends State<_EditPlayerDialog> {
+  late final TextEditingController _usernameCtrl =
+      TextEditingController(text: widget.profile.username);
+  late final TextEditingController _nameCtrl =
+      TextEditingController(text: widget.profile.name ?? '');
+  final TextEditingController _passwordCtrl = TextEditingController();
+
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _usernameCtrl.dispose();
+    _nameCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final username = _usernameCtrl.text.trim();
+    if (username.isEmpty) {
+      setState(() => _error = 'Username cannot be empty.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final ok = await widget.onSave(username, _nameCtrl.text.trim(), _passwordCtrl.text);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Update Player'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _DialogField(label: 'Username', controller: _usernameCtrl),
+            _DialogField(label: 'Player Name', controller: _nameCtrl),
+            _DialogField(
+              label: 'New Password (optional)',
+              controller: _passwordCtrl,
+              obscureText: true,
+            ),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Saving...' : 'Save'),
+        ),
+      ],
     );
   }
 }

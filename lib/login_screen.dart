@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'api.dart';
 import 'auth_models.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,8 +18,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  final String apiBase = 'http://100.69.77.17';
 
   bool loading = false;
   String error = '';
@@ -81,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       setState(() => error = 'Unexpected server response.');
     } catch (e) {
-      setState(() => error = 'Request failed: $e');
+      if (mounted) setState(() => error = 'Request failed: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -143,12 +142,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.88),
+                        color: Colors.white.withValues(alpha: 0.88),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFD6E2D4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withValues(alpha: 0.08),
                             blurRadius: 18,
                             offset: const Offset(0, 8),
                           ),
@@ -172,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 10),
                           Text(
                             'Sign in to continue your hunt operations.',
-                            style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.7)),
+                            style: TextStyle(fontSize: 14, color: Colors.black.withValues(alpha: 0.7)),
                           ),
                           const SizedBox(height: 16),
                           _Field(label: 'Username', controller: _usernameController),
@@ -292,8 +291,6 @@ class _CreatePlayerAccountScreenState extends State<CreatePlayerAccountScreen> {
   final _nameController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  final String apiBase = 'http://15.224.51.87';
-
   bool saving = false;
   String error = '';
 
@@ -329,8 +326,13 @@ class _CreatePlayerAccountScreenState extends State<CreatePlayerAccountScreen> {
         'password': password,
       }).timeout(const Duration(seconds: 10));
 
+      if (!mounted) return;
       if (resp.statusCode == 200) {
-        if (!mounted) return;
+        final serverError = responseError(resp.body);
+        if (serverError != null) {
+          setState(() => error = serverError);
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Account created successfully')),
         );
@@ -339,7 +341,7 @@ class _CreatePlayerAccountScreenState extends State<CreatePlayerAccountScreen> {
         setState(() => error = 'Create failed: ${resp.statusCode}\n${resp.body}');
       }
     } catch (e) {
-      setState(() => error = 'Request failed: $e');
+      if (mounted) setState(() => error = 'Request failed: $e');
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -382,7 +384,7 @@ class _CreatePlayerAccountScreenState extends State<CreatePlayerAccountScreen> {
                         borderRadius: BorderRadius.circular(28),
                         border: Border.all(color: const Color(0xFFE6D39A), width: 8),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 12)),
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 12)),
                         ],
                       ),
                       child: Column(
@@ -390,7 +392,7 @@ class _CreatePlayerAccountScreenState extends State<CreatePlayerAccountScreen> {
                         children: [
                           const Text('Create a new player account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 6),
-                          Text('Enter details below to register your hunter profile.', style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.7))),
+                          Text('Enter details below to register your hunter profile.', style: TextStyle(fontSize: 14, color: Colors.black.withValues(alpha: 0.7))),
                           const SizedBox(height: 16),
                           _Field(label: 'Username', controller: _usernameController),
                           const SizedBox(height: 10),
@@ -502,7 +504,7 @@ class _FieldState extends State<_Field> {
 }
 
 class _PokeballIcon extends StatelessWidget {
-  const _PokeballIcon({super.key});
+  const _PokeballIcon();
 
   @override
   Widget build(BuildContext context) {

@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "if [ -d flutter ]; then echo 'flutter cached'; else git clone https://github.com/flutter/flutter.git -b 3.35.2 --depth 1; fi && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get",
-  "buildCommand": "flutter/bin/flutter build web --release",
+  "buildCommand": "flutter/bin/flutter build web --release ${API_BASE:+--dart-define=API_BASE=$API_BASE} ${INSTANCE_API:+--dart-define=INSTANCE_API=$INSTANCE_API}",
   "outputDirectory": "build/web"
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'api.dart';
 import 'theme.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -21,7 +22,6 @@ class ShowMonsterMapScreen extends StatefulWidget {
 
 class _ShowMonsterMapScreenState extends State<ShowMonsterMapScreen> {
   late final TextEditingController _playerController;
-  final String apiBase = 'http://100.69.77.17';
   final MapController _mapController = MapController();
 
   bool loading = false;
@@ -57,6 +57,7 @@ class _ShowMonsterMapScreenState extends State<ShowMonsterMapScreen> {
 
     try {
       final resp = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (resp.statusCode == 200) {
         final parsed = _parseCaught(resp.body, expectedPlayerId: playerId);
         final serverMsg = _extractServerMessage(resp.body);
@@ -78,7 +79,7 @@ class _ShowMonsterMapScreenState extends State<ShowMonsterMapScreen> {
         setState(() => loadError = 'Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
       }
     } catch (e) {
-      setState(() => loadError = 'Request failed: $e');
+      if (mounted) setState(() => loadError = 'Request failed: $e');
     } finally {
       if (mounted) {
         setState(() => loading = false);
@@ -88,7 +89,6 @@ class _ShowMonsterMapScreenState extends State<ShowMonsterMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
     final positionedMonsters = _spreadOverlappingMonsters(monsters);
     final initialCenter = monsters.isNotEmpty
         ? LatLng(monsters.first.lat, monsters.first.lon)
@@ -342,8 +342,8 @@ class _CaughtMonster {
       playerId: map['player_id']?.toString() ?? '',
       name: map['monster_name']?.toString() ?? 'Monster',
       type: map['monster_type']?.toString() ?? 'Unknown',
-      lat: hasSpawn ? spawnLat! : (hasCatch ? catchLat! : 0),
-      lon: hasSpawn ? spawnLon! : (hasCatch ? catchLon! : 0),
+      lat: hasSpawn ? spawnLat : (hasCatch ? catchLat : 0),
+      lon: hasSpawn ? spawnLon : (hasCatch ? catchLon : 0),
       coordinateSource: hasSpawn
           ? 'Spawn'
           : (hasCatch ? 'Caught location' : 'Unknown'),

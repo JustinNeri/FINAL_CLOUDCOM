@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'api.dart';
 import 'theme.dart';
 class AddMonsterScreen extends StatefulWidget {
   const AddMonsterScreen({super.key});
@@ -19,6 +20,8 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
 
   LatLng _selected = const LatLng(15.1636563, 120.5860201);
   double _radiusMeters = 100;
+  bool _saving = false;
+  bool _mapReady = false;
 
   @override
   void initState() {
@@ -31,30 +34,47 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
     final type = _typeController.text.trim();
     final lat = _selected.latitude;
     final lon = _selected.longitude;
-    final radius = _radiusMeters;
+    final radius = double.tryParse(_radiusController.text.trim());
 
     if (name.isEmpty || type.isEmpty) {
       _showStub("Please fill all fields");
       return;
     }
+    if (radius == null || radius <= 0) {
+      _showStub("Spawn radius must be a number greater than 0");
+      return;
+    }
 
-    final url = Uri.parse(
-      "http://100.69.77.17/add_monster_api.php"
-      "?name=$name&type=$type&lat=$lat&lon=$lon&radius=$radius",
+    final url = Uri.parse("$apiBase/add_monster_api.php").replace(
+      queryParameters: {
+        'name': name,
+        'type': type,
+        'lat': lat.toString(),
+        'lon': lon.toString(),
+        'radius': radius.toString(),
+      },
     );
 
+    setState(() => _saving = true);
     try {
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
-        _showStub(response.body);
-        if (!mounted) return;
+        final serverError = responseError(response.body);
+        if (serverError != null) {
+          _showStub(serverError);
+          return;
+        }
+        _showStub(response.body.trim().isEmpty ? "Monster saved" : response.body);
         Navigator.of(context).pop();
       } else {
-        _showStub("Failed to save monster");
+        _showStub("Failed to save monster (${response.statusCode})");
       }
     } catch (e) {
-      _showStub("Error: $e");
+      if (mounted) _showStub("Error: $e");
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -109,7 +129,8 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
       if (!mounted) return;
 
       setState(() => _selected = next);
-      _mapController.move(next, _mapController.camera.zoom);
+      // Before the map is ready, onMapReady centers it on _selected instead.
+      if (_mapReady) _mapController.move(next, _mapController.camera.zoom);
     } catch (_) {
       // Keep existing fallback location if GPS is unavailable.
     }
@@ -117,7 +138,6 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
     const border = Color(0xFFCBD8C9);
 
     return Scaffold(
@@ -188,6 +208,10 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
                       initialCenter: _selected,
                       initialZoom: 17,
                       onTap: _onMapTap,
+                      onMapReady: () {
+                        _mapReady = true;
+                        _mapController.move(_selected, _mapController.camera.zoom);
+                      },
                     ),
                     children: [
                       TileLayer(
@@ -200,9 +224,9 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
                         circles: [
                           CircleMarker(
                             point: _selected,
-                            color: ThemeColors.deepNavy.withOpacity(0.18),
+                            color: ThemeColors.deepNavy.withValues(alpha: 0.18),
                             borderStrokeWidth: 2,
-                            borderColor: ThemeColors.deepNavy.withOpacity(0.5),
+                            borderColor: ThemeColors.deepNavy.withValues(alpha: 0.5),
                             useRadiusInMeter: true,
                             radius: _radiusMeters,
                           ),
@@ -250,9 +274,9 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
               ),
               const SizedBox(height: 12),
               _ActionButton(
-                label: 'Save Monster',
+                label: _saving ? 'Saving...' : 'Save Monster',
                 icon: Icons.save_outlined,
-                onPressed: _saveMonster,
+                onPressed: _saving ? null : _saveMonster,
                 filled: true,
               ),
             ],
@@ -321,12 +345,11 @@ class _ActionButton extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool filled;
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(

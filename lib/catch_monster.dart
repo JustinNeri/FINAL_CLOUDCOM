@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:torch_light/torch_light.dart';
+import 'api.dart';
 import 'theme.dart';
 
 class CatchMonsterScreen extends StatefulWidget {
@@ -21,9 +22,6 @@ class CatchMonsterScreen extends StatefulWidget {
 }
 
 class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
-  // Replace with your API base (FastAPI/PHPScript over VPN)
-  final String apiBase = "http://100.69.77.17";
-
   String latitude = "";
   String longitude = "";
   String detectMessage = "";
@@ -121,6 +119,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
         }
       }
 
+      if (!mounted) return;
       setState(() {
         caughtIds
           ..clear()
@@ -131,39 +130,48 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
     }
   }
 
-  Future<void> getLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() => error = "Location services are disabled. Enable GPS.");
-      return;
+  /// Updates [latitude]/[longitude]; returns false and sets [error] on failure.
+  Future<bool> getLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) setState(() => error = "Location services are disabled. Enable GPS.");
+        return false;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) setState(() => error = "Location permission denied.");
+        return false;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+
+      if (!mounted) return false;
+      setState(() {
+        latitude = position.latitude.toString();
+        longitude = position.longitude.toString();
+        error = "";
+      });
+      return true;
+    } catch (e) {
+      if (mounted) setState(() => error = "Could not get your location: $e");
+      return false;
     }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.deniedForever ||
-        permission == LocationPermission.denied) {
-      setState(() => error = "Location permission denied.");
-      return;
-    }
-
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    setState(() {
-      latitude = position.latitude.toString();
-      longitude = position.longitude.toString();
-      error = "";
-    });
   }
 
   Future<void> detectMonster() async {
-    await getLocation();
-    if (latitude.isEmpty || longitude.isEmpty) return;
+    if (!await getLocation()) return;
     await _syncCaughtIdsFromServer();
+    if (!mounted) return;
 
     setState(() {
       detecting = true;
@@ -181,6 +189,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         if (response.body.isEmpty) {
           setState(() => detectMessage = "No monster found nearby.");
@@ -227,9 +236,9 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
         setState(() => error = "Server error: ${response.statusCode}");
       }
     } catch (e) {
-      setState(() => error = "Request failed: $e");
+      if (mounted) setState(() => error = "Request failed: $e");
     } finally {
-      setState(() => detecting = false);
+      if (mounted) setState(() => detecting = false);
     }
   }
 
@@ -238,8 +247,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
       setState(() => catchMessage = "Detect first, then catch.");
       return;
     }
-    await getLocation();
-    if (latitude.isEmpty || longitude.isEmpty) return;
+    if (!await getLocation()) return;
 
     setState(() {
       catching = true;
@@ -259,7 +267,13 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
     try {
       final response =
           await http.post(url, body: body).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       if (response.statusCode == 200) {
+        final serverError = responseError(response.body);
+        if (serverError != null) {
+          setState(() => error = "Catch failed: $serverError");
+          return;
+        }
         setState(() {
           catchMessage =
               response.body.isEmpty ? "Catch recorded." : response.body;
@@ -292,9 +306,9 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
         setState(() => error = "Catch failed: ${response.statusCode}");
       }
     } catch (e) {
-      setState(() => error = "Request failed: $e");
+      if (mounted) setState(() => error = "Request failed: $e");
     } finally {
-      setState(() => catching = false);
+      if (mounted) setState(() => catching = false);
     }
   }
 
@@ -451,7 +465,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: selected
-                                ? ThemeColors.pokeYellow.withOpacity(0.12)
+                                ? ThemeColors.pokeYellow.withValues(alpha: 0.12)
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
