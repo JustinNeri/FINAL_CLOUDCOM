@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'add_monster.dart';
 import 'catch_monster.dart';
 import 'instance_screen.dart';
+import 'instance_status.dart';
 import 'edit_monster.dart';
 import 'delete_monster.dart';
 import 'top_hunters.dart';
@@ -9,9 +10,11 @@ import 'show_monster_map.dart';
 import 'login_screen.dart';
 import 'player_accounts_screen.dart';
 import 'auth_models.dart';
+import 'session.dart';
 import 'theme.dart';
 import 'about_us.dart';
 import 'privacy_policy.dart';
+import 'widgets.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,75 +29,58 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   PlayerProfile? _currentPlayer;
+  bool _restoringSession = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final saved = await Session.load();
+    if (!mounted) return;
+    setState(() {
+      _currentPlayer = saved;
+      _restoringSession = false;
+    });
+  }
 
   void _handleLogin(PlayerProfile profile) {
     setState(() => _currentPlayer = profile);
+    Session.save(profile);
   }
 
   void _handleLogout() {
     setState(() => _currentPlayer = null);
+    Session.clear();
   }
 
   void _handlePlayerProfileUpdate(PlayerProfile profile) {
     setState(() => _currentPlayer = profile);
+    Session.save(profile);
   }
 
   @override
   Widget build(BuildContext context) {
+    final Widget home;
+    if (_restoringSession) {
+      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else if (_currentPlayer == null) {
+      home = LoginScreen(onLoginSuccess: _handleLogin);
+    } else {
+      home = MainMenu(
+        currentPlayer: _currentPlayer!,
+        onLogout: _handleLogout,
+        onPlayerUpdated: _handlePlayerProfileUpdate,
+      );
+    }
+
     return MaterialApp(
       title: 'Monster Control Center',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: ThemeColors.deepNavy,
-        colorScheme: ColorScheme.fromSeed(seedColor: ThemeColors.deepNavy),
-        scaffoldBackgroundColor: const Color(0xFFF7F9FC),
-        fontFamily: 'Montserrat',
-        useMaterial3: false,
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: ThemeColors.deepNavy,
-          elevation: 2,
-          toolbarHeight: 86,
-          titleTextStyle: const TextStyle(color: ThemeColors.deepNavy, fontSize: 20, fontWeight: FontWeight.w800),
-          iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(18))),
-          titleSpacing: 16,
-        ),
-        cardTheme: CardThemeData(
-          color: ThemeColors.cardNavy,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: ThemeColors.borderNavy, width: 1)),
-          elevation: 4,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.all(12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFB0BEC5))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFB0BEC5))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: ThemeColors.pokeYellow, width: 2)),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ButtonStyle(
-            backgroundColor: WidgetStateProperty.all(ThemeColors.pokeYellow),
-            foregroundColor: WidgetStateProperty.all(Colors.black),
-            elevation: WidgetStateProperty.all(8),
-            shadowColor: WidgetStateProperty.all(const Color(0x99FFCB05)),
-            shape: WidgetStateProperty.all(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 14, horizontal: 20)),
-          ),
-        ),
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          bodyMedium: TextStyle(color: ThemeColors.accentMuted),
-        ),
-      ),
-      home: _currentPlayer == null
-          ? LoginScreen(onLoginSuccess: _handleLogin)
-          : MainMenu(
-              currentPlayer: _currentPlayer!,
-              onLogout: _handleLogout,
-              onPlayerUpdated: _handlePlayerProfileUpdate,
-            ),
+      theme: AppTheme.light(),
+      home: home,
     );
   }
 }
@@ -116,239 +102,147 @@ class MainMenu extends StatefulWidget {
 }
 
 class _MainMenuState extends State<MainMenu> {
-  /// Null until the instance screen has reported the real status.
-  bool? instanceOn;
+  InstanceState instanceState = InstanceState.unknown;
 
-  /// Catching is paused while the instance is known to be offline.
+  void _push(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Future<void> _openInstance() async {
+    final result = await Navigator.of(context).push<InstanceState>(
+      MaterialPageRoute(builder: (_) => InstanceScreen(initialState: instanceState)),
+    );
+    if (result != null && mounted) setState(() => instanceState = result);
+  }
+
+  /// Catching is paused while the instance is down or changing state.
   void _openCatch() {
-    if (instanceOn == false) {
+    if (!instanceState.allowsCatching) {
+      final message = switch (instanceState) {
+        InstanceState.starting => 'The server is still starting. Try again in a minute.',
+        InstanceState.stopping => 'The server is shutting down. Start it again to catch monsters.',
+        _ => 'The server is offline. Start it to catch monsters.',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The instance is offline. Turn it on in Instance status to catch monsters.')),
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(label: 'Open', onPressed: _openInstance),
+        ),
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CatchMonsterScreen(playerId: widget.currentPlayer.id),
+    _push(CatchMonsterScreen(playerId: widget.currentPlayer.id));
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will need to sign in again to keep hunting.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Log out')),
+        ],
       ),
     );
+    if (confirmed == true) widget.onLogout();
   }
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
-    const accentGreen = ThemeColors.pokeYellow;
-    const borderGreen = ThemeColors.borderNavy;
+    final player = widget.currentPlayer;
+    final actions = [
+      _MenuAction(
+        title: 'Catch Monsters',
+        subtitle: 'Find nearby spawns',
+        icon: Icons.catching_pokemon,
+        color: ThemeColors.pokeRed,
+        onTap: _openCatch,
+      ),
+      _MenuAction(
+        title: 'Monster Map',
+        subtitle: 'See where you caught them',
+        icon: Icons.map_outlined,
+        color: ThemeColors.success,
+        onTap: () => _push(ShowMonsterMapScreen(playerId: player.id)),
+      ),
+      _MenuAction(
+        title: 'Top Hunters',
+        subtitle: 'Leaderboard',
+        icon: Icons.emoji_events_outlined,
+        color: Colors.purple,
+        onTap: () => _push(TopHuntersScreen(currentPlayerId: player.id)),
+      ),
+      _MenuAction(
+        title: 'Add Monsters',
+        subtitle: 'Create a new spawn',
+        icon: Icons.add_location_alt_outlined,
+        color: ThemeColors.pokeBlue,
+        onTap: () => _push(const AddMonsterScreen()),
+      ),
+      _MenuAction(
+        title: 'Edit Monsters',
+        subtitle: 'Rename your catches',
+        icon: Icons.edit_outlined,
+        color: Colors.teal,
+        onTap: () => _push(EditMonsterScreen(playerId: player.id)),
+      ),
+      _MenuAction(
+        title: 'Delete Monsters',
+        subtitle: 'Release old catches',
+        icon: Icons.delete_outline,
+        color: Colors.deepOrange,
+        onTap: () => _push(DeleteMonsterScreen(playerId: player.id)),
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        elevation: 0,
-        title: const Text('Monster Control Center',
-            style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Monster Control Center'),
+        actions: [
+          IconButton(
+            tooltip: 'My account',
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () => _push(PlayerAccountsScreen(
+              currentPlayer: player,
+              onProfileUpdated: widget.onPlayerUpdated,
+            )),
+          ),
+        ],
       ),
       drawer: _AppDrawer(
-        baseGreen: baseGreen,
-        currentPlayer: widget.currentPlayer,
-        onLogout: widget.onLogout,
-        onPlayerUpdated: widget.onPlayerUpdated,
+        currentPlayer: player,
+        onNavigate: _push,
         onOpenCatch: _openCatch,
+        onLogout: _confirmLogout,
+        onPlayerUpdated: widget.onPlayerUpdated,
       ),
-      body: Container(
-        color: const Color(0xFFF7F9FC),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: ContentWidth(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    color: ThemeColors.pokeBlue,
-                    boxShadow: [
-                      BoxShadow(
-                        color: ThemeColors.pokeBlue.withValues(alpha: 0.16),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -10,
-                        top: -18,
-                        child: Icon(
-                          Icons.catching_pokemon,
-                          size: 120,
-                          color: Colors.white.withValues(alpha: 0.06),
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                height: 54,
-                                width: 54,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white,
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
-                                ),
-                                child: const Icon(Icons.catching_pokemon, color: ThemeColors.pokeRed, size: 30),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Trainer Hub',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'A colorful base for your monster adventures',
-                                    style: TextStyle(
-                                      color: Color(0xFFFFF8E1),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          // removed unclickable pills per UX request
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                _WelcomeCard(player: player),
                 const SizedBox(height: 14),
-                GestureDetector(
-                  onTap: () async {
-                    final result = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(
-                        builder: (_) => InstanceScreen(initialStatus: instanceOn ?? false),
-                      ),
+                _InstanceCard(state: instanceState, onTap: _openInstance),
+                const SizedBox(height: 22),
+                const SectionTitle('What do you want to do?'),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 560 ? 3 : 2;
+                    return GridView.count(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: columns == 3 ? 1.35 : 1.15,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [for (final action in actions) _MenuCard(action: action)],
                     );
-                    if (result != null) {
-                      setState(() {
-                        instanceOn = result;
-                      });
-                    }
                   },
-                  child: _InstancePreviewCard(
-                    instanceOn: instanceOn,
-                    baseGreen: baseGreen,
-                    accentGreen: accentGreen,
-                    borderGreen: borderGreen,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _MenuCard(
-                      title: 'Add Monsters',
-                      subtitle: 'Create new entries',
-                      icon: Icons.add_circle_outline,
-                      color: Colors.white,
-                      accent: ThemeColors.pokeBlue,
-                      background: ThemeColors.pokeBlue,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AddMonsterScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _MenuCard(
-                      title: 'Catch Monsters',
-                      subtitle: 'Find nearby spawns',
-                      icon: Icons.catching_pokemon,
-                      color: Colors.white,
-                      accent: ThemeColors.pokeRed,
-                      background: ThemeColors.pokeRed,
-                      highlight: true,
-                      onTap: _openCatch,
-                    ),
-                    _MenuCard(
-                      title: 'Edit Monsters',
-                      subtitle: 'Update details',
-                      icon: Icons.edit_outlined,
-                      color: Colors.white,
-                      accent: Colors.teal,
-                      background: Colors.teal,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => EditMonsterScreen(playerId: widget.currentPlayer.id),
-                          ),
-                        );
-                      },
-                    ),
-                    _MenuCard(
-                      title: 'Delete Monsters',
-                      subtitle: 'Clean old data',
-                      icon: Icons.delete_outline,
-                      color: Colors.white,
-                      accent: Colors.deepOrange,
-                      background: Colors.deepOrange,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => DeleteMonsterScreen(playerId: widget.currentPlayer.id),
-                          ),
-                        );
-                      },
-                    ),
-                    _MenuCard(
-                      title: 'View Top Monster Hunters',
-                      subtitle: 'Leaderboard',
-                      icon: Icons.emoji_events_outlined,
-                      color: Colors.white,
-                      accent: Colors.purple,
-                      background: Colors.purple,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => TopHuntersScreen(currentPlayerId: widget.currentPlayer.id),
-                          ),
-                        );
-                      },
-                    ),
-                    _MenuCard(
-                      title: 'Show Monster Map',
-                      subtitle: 'See hotspots',
-                      icon: Icons.map_outlined,
-                      color: Colors.white,
-                      accent: Colors.green,
-                      background: Colors.green,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ShowMonsterMapScreen(playerId: widget.currentPlayer.id),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -359,100 +253,101 @@ class _MainMenuState extends State<MainMenu> {
   }
 }
 
-class _MenuCard extends StatelessWidget {
-  const _MenuCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.accent,
-    required this.background,
-    required this.onTap,
-    this.highlight = false,
-  });
+class _WelcomeCard extends StatelessWidget {
+  const _WelcomeCard({required this.player});
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final Color accent;
-  final Color background;
-  final VoidCallback onTap;
-  final bool highlight;
+  final PlayerProfile player;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: background,
-          border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-          ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [ThemeColors.pokeBlue, Color(0xFF3949AB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        boxShadow: [
+          BoxShadow(color: ThemeColors.pokeBlue.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: -18,
+            top: -26,
+            child: Icon(Icons.catching_pokemon, size: 130, color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    height: 46,
-                    width: 46,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.18),
+              const AppLogo(size: 56),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back, ${player.displayName}!',
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
                     ),
-                    child: Icon(icon, color: Colors.white, size: 26),
-                  ),
-                  if (highlight)
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Focus',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Trainer ID #${player.id} · Ready for your next hunt?',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
                     ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  height: 1.15,
-                  letterSpacing: 0.6,
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.95),
-                  fontSize: 13,
-                  height: 1.25,
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InstanceCard extends StatelessWidget {
+  const _InstanceCard({required this.state, required this.onTap});
+
+  final InstanceState state;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              IconBadge(icon: state.icon, color: state.color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('Server instance', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                        const SizedBox(width: 8),
+                        Pill(label: state.label, color: state.color),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      state == InstanceState.unknown ? 'Tap to check the server status.' : state.description,
+                      style: const TextStyle(color: ThemeColors.textMuted, fontSize: 13),
+                    ),
+                  ],
                 ),
               ),
+              const Icon(Icons.chevron_right, color: ThemeColors.accentMuted),
             ],
           ),
         ),
@@ -461,113 +356,60 @@ class _MenuCard extends StatelessWidget {
   }
 }
 
-class _InstancePreviewCard extends StatelessWidget {
-  const _InstancePreviewCard({
-    required this.instanceOn,
-    required this.baseGreen,
-    required this.accentGreen,
-    required this.borderGreen,
+class _MenuAction {
+  const _MenuAction({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
   });
 
-  final bool? instanceOn;
-  final Color baseGreen;
-  final Color accentGreen;
-  final Color borderGreen;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _MenuCard extends StatelessWidget {
+  const _MenuCard({required this.action});
+
+  final _MenuAction action;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (instanceOn) {
-      true => ThemeColors.pokeYellow,
-      false => Colors.redAccent,
-      null => ThemeColors.accentMuted,
-    };
-    final statusLabel = switch (instanceOn) {
-      true => 'Online',
-      false => 'Offline',
-      null => 'Unknown',
-    };
-    final statusText = switch (instanceOn) {
-      true => 'All systems nominal. Catch flows and monitoring are active.',
-      false => 'Paused for maintenance. Reactivate to resume catch and detect.',
-      null => 'Status not checked yet. Tap to check the instance.',
-    };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 58,
-            decoration: BoxDecoration(
-              color: statusColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+    return Semantics(
+      button: true,
+      label: '${action.title}. ${action.subtitle}',
+      excludeSemantics: true,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: action.onTap,
+          splashColor: action.color.withValues(alpha: 0.12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'Instance status',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: ThemeColors.deepNavy,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Text(
-                          statusLabel,
-                          key: ValueKey(instanceOn),
-                          style: TextStyle(
-                            color: instanceOn == false ? Colors.redAccent : ThemeColors.deepNavy,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
+                IconBadge(icon: action.icon, color: action.color, size: 48),
+                const Spacer(),
                 Text(
-                  statusText,
-                  style: TextStyle(
-                    color: ThemeColors.deepNavy.withValues(alpha: 0.8),
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
+                  action.title,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ThemeColors.deepNavy, height: 1.2),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  action.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: ThemeColors.textMuted, fontSize: 12.5),
                 ),
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: ThemeColors.deepNavy.withValues(alpha: 0.5)),
-        ],
+        ),
       ),
     );
   }
@@ -575,115 +417,60 @@ class _InstancePreviewCard extends StatelessWidget {
 
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
-    required this.baseGreen,
     required this.currentPlayer,
+    required this.onNavigate,
+    required this.onOpenCatch,
     required this.onLogout,
     required this.onPlayerUpdated,
-    required this.onOpenCatch,
   });
 
-  final Color baseGreen;
   final PlayerProfile currentPlayer;
+  final ValueChanged<Widget> onNavigate;
+  final VoidCallback onOpenCatch;
   final VoidCallback onLogout;
   final ValueChanged<PlayerProfile> onPlayerUpdated;
-  final VoidCallback onOpenCatch;
 
   @override
   Widget build(BuildContext context) {
+    void go(Widget screen) {
+      Navigator.pop(context);
+      onNavigate(screen);
+    }
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          UserAccountsDrawerHeader(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [ThemeColors.pokeBlue, ThemeColors.pokeRed]),
-              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
+          Container(
+            padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 20),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [ThemeColors.deepNavy, ThemeColors.cardNavy]),
             ),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: Icon(Icons.person, color: ThemeColors.deepNavy),
-            ),
-            accountName: Text(
-              currentPlayer.name?.isNotEmpty == true
-                  ? currentPlayer.name!
-                  : currentPlayer.username,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-            ),
-            accountEmail: Text('Player ID: ${currentPlayer.id}', style: const TextStyle(color: Colors.white70)),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            onTap: () => Navigator.pop(context),
-          ),
-          ExpansionTile(
-            leading: const Icon(Icons.list_alt),
-            title: const Text('Manage Monsters'),
-            children: [
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('Add Monster'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AddMonsterScreen(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit Monsters'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => EditMonsterScreen(playerId: currentPlayer.id),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete Monsters'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DeleteMonsterScreen(playerId: currentPlayer.id),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          ListTile(
-            leading: const Icon(Icons.emoji_events_outlined),
-            title: const Text('View Top Monster Hunters'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => TopHuntersScreen(currentPlayerId: currentPlayer.id),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.manage_accounts_outlined),
-            title: const Text('My Account'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => PlayerAccountsScreen(
-                    currentPlayer: currentPlayer,
-                    onProfileUpdated: onPlayerUpdated,
+            child: Row(
+              children: [
+                const AppLogo(size: 52),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentPlayer.displayName,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Trainer ID #${currentPlayer.id}', style: const TextStyle(color: Colors.white70)),
+                    ],
                   ),
                 ),
-              );
-            },
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.dashboard_outlined),
+            title: const Text('Dashboard'),
+            onTap: () => Navigator.pop(context),
           ),
           ListTile(
             leading: const Icon(Icons.catching_pokemon),
@@ -695,44 +482,61 @@ class _AppDrawer extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.map_outlined),
-            title: const Text('Show Monster Map'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ShowMonsterMapScreen(playerId: currentPlayer.id),
-                ),
-              );
-            },
+            title: const Text('Monster Map'),
+            onTap: () => go(ShowMonsterMapScreen(playerId: currentPlayer.id)),
           ),
           ListTile(
-            leading: const Icon(Icons.info, color: Colors.grey),
+            leading: const Icon(Icons.emoji_events_outlined),
+            title: const Text('Top Hunters'),
+            onTap: () => go(TopHuntersScreen(currentPlayerId: currentPlayer.id)),
+          ),
+          ExpansionTile(
+            leading: const Icon(Icons.list_alt),
+            title: const Text('Manage Monsters'),
+            shape: const Border(),
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                leading: const Icon(Icons.add_location_alt_outlined),
+                title: const Text('Add Monster'),
+                onTap: () => go(const AddMonsterScreen()),
+              ),
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit Monsters'),
+                onTap: () => go(EditMonsterScreen(playerId: currentPlayer.id)),
+              ),
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete Monsters'),
+                onTap: () => go(DeleteMonsterScreen(playerId: currentPlayer.id)),
+              ),
+            ],
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_accounts_outlined),
+            title: const Text('My Account'),
+            onTap: () => go(PlayerAccountsScreen(
+              currentPlayer: currentPlayer,
+              onProfileUpdated: onPlayerUpdated,
+            )),
+          ),
+          const Divider(height: 24),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
             title: const Text('About Us'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AboutUsScreen(),
-                ),
-              );
-            },
+            onTap: () => go(const AboutUsScreen()),
           ),
           ListTile(
-            leading: const Icon(Icons.privacy_tip, color: Colors.grey),
+            leading: const Icon(Icons.privacy_tip_outlined),
             title: const Text('Privacy Policy'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const PrivacyPolicyScreen(),
-                ),
-              );
-            },
+            onTap: () => go(const PrivacyPolicyScreen()),
           ),
-          const Divider(),
           ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Log Out'),
+            leading: const Icon(Icons.logout, color: ThemeColors.pokeRed),
+            title: const Text('Log Out', style: TextStyle(color: ThemeColors.pokeRed, fontWeight: FontWeight.w600)),
             onTap: () {
               Navigator.pop(context);
               onLogout();

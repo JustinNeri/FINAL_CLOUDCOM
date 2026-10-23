@@ -18,9 +18,13 @@ Live web version: https://pokemon-ip-tau.vercel.app
 
 | Path | What it is |
 |------|------------|
-| `lib/main.dart` | App entry, dashboard and navigation drawer |
-| `lib/api.dart` | Backend addresses and response error handling |
+| `lib/main.dart` | App entry, saved login, dashboard and navigation drawer |
+| `lib/theme.dart`, `lib/widgets.dart` | App-wide theme and shared UI pieces |
+| `lib/api.dart` | Backend addresses, HTTP client and response parsing |
+| `lib/session.dart`, `lib/location.dart` | Remembered login and GPS access |
+| `lib/caught_monsters.dart`, `lib/instance_status.dart` | Shared data models for monsters and the server instance |
 | `lib/*_screen.dart`, `lib/*_monster.dart` | One file per screen |
+| `test/` | Widget and unit tests using a fake server (`test/helpers.dart`) |
 | `backend/` | CORS helper and setup guide for the PHP server |
 | `vercel.json` | Builds the Flutter web app on Vercel |
 

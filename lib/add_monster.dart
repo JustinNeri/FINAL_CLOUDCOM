@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
+
 import 'api.dart';
+import 'location.dart';
+import 'map_tiles.dart';
 import 'theme.dart';
+import 'widgets.dart';
+
 class AddMonsterScreen extends StatefulWidget {
   const AddMonsterScreen({super.key});
 
@@ -13,6 +16,7 @@ class AddMonsterScreen extends StatefulWidget {
 }
 
 class _AddMonsterScreenState extends State<AddMonsterScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _typeController = TextEditingController();
   final _radiusController = TextEditingController(text: '100');
@@ -21,61 +25,14 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
   LatLng _selected = const LatLng(15.1636563, 120.5860201);
   double _radiusMeters = 100;
   bool _saving = false;
+  bool _locating = false;
   bool _mapReady = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _setDefaultToCurrentLocation();
-  }
-
-  Future<void> _saveMonster() async {
-    final name = _nameController.text.trim();
-    final type = _typeController.text.trim();
-    final lat = _selected.latitude;
-    final lon = _selected.longitude;
-    final radius = double.tryParse(_radiusController.text.trim());
-
-    if (name.isEmpty || type.isEmpty) {
-      _showStub("Please fill all fields");
-      return;
-    }
-    if (radius == null || radius <= 0) {
-      _showStub("Spawn radius must be a number greater than 0");
-      return;
-    }
-
-    final url = Uri.parse("$apiBase/add_monster_api.php").replace(
-      queryParameters: {
-        'name': name,
-        'type': type,
-        'lat': lat.toString(),
-        'lon': lon.toString(),
-        'radius': radius.toString(),
-      },
-    );
-
-    setState(() => _saving = true);
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final serverError = responseError(response.body);
-        if (serverError != null) {
-          _showStub(serverError);
-          return;
-        }
-        _showStub(response.body.trim().isEmpty ? "Monster saved" : response.body);
-        Navigator.of(context).pop();
-      } else {
-        _showStub("Failed to save monster (${response.statusCode})");
-      }
-    } catch (e) {
-      if (mounted) _showStub("Error: $e");
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+    _useCurrentLocation(quiet: true);
   }
 
   @override
@@ -86,9 +43,65 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
     super.dispose();
   }
 
-  void _onMapTap(TapPosition tapPosition, LatLng latLng) {
-    setState(() => _selected = latLng);
-    _mapController.move(latLng, _mapController.camera.zoom);
+  Future<void> _saveMonster() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = _nameController.text.trim();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final response = await apiGet('add_monster_api.php', {
+        'name': name,
+        'type': _typeController.text.trim(),
+        'lat': _selected.latitude.toString(),
+        'lon': _selected.longitude.toString(),
+        'radius': _radiusMeters.toString(),
+      });
+      if (!mounted) return;
+
+      if (response.statusCode != 200) {
+        setState(() => _error = 'Failed to save monster (${response.statusCode}).');
+        return;
+      }
+      final serverError = responseError(response.body);
+      if (serverError != null) {
+        setState(() => _error = serverError);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(response.body.trim().isEmpty ? '$name added to the map.' : response.body)),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = requestErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _moveTo(LatLng point) {
+    setState(() => _selected = point);
+    // Before the map is ready, onMapReady centers it on _selected instead.
+    if (_mapReady) _mapController.move(point, _mapController.camera.zoom);
+  }
+
+  /// Moves the spawn point to the device location. [quiet] skips the error
+  /// message, for the automatic attempt when the screen opens.
+  Future<void> _useCurrentLocation({bool quiet = false}) async {
+    setState(() => _locating = true);
+    try {
+      final position = await currentLocation();
+      if (mounted) _moveTo(position);
+    } catch (e) {
+      if (mounted && !quiet) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   void _onRadiusChanged(String value) {
@@ -98,275 +111,139 @@ class _AddMonsterScreenState extends State<AddMonsterScreen> {
     }
   }
 
-  void _showStub(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
-  }
-
-  Future<void> _setDefaultToCurrentLocation() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final next = LatLng(position.latitude, position.longitude);
-      if (!mounted) return;
-
-      setState(() => _selected = next);
-      // Before the map is ready, onMapReady centers it on _selected instead.
-      if (_mapReady) _mapController.move(next, _mapController.camera.zoom);
-    } catch (_) {
-      // Keep existing fallback location if GPS is unavailable.
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    const border = Color(0xFFCBD8C9);
-
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        title: const Text('Add Monster', style: TextStyle(color: ThemeColors.deepNavy)),
-        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
-            ),
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeRed,
-              child: const Icon(Icons.add, color: Colors.white),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Add Monster')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _LabeledField(
-                label: 'Monster Name',
-                controller: _nameController,
-                hint: 'Monster Name',
-              ),
-              const SizedBox(height: 10),
-              _LabeledField(
-                label: 'Monster Type',
-                controller: _typeController,
-                hint: 'Monster Type',
-              ),
-              const SizedBox(height: 10),
-              _LabeledField(
-                label: 'Spawn Radius (meters)',
-                controller: _radiusController,
-                hint: '100',
-                keyboardType: TextInputType.number,
-                onChanged: _onRadiusChanged,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                height: 260,
-                decoration: BoxDecoration(
-                  color: ThemeColors.cardNavy,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: ThemeColors.borderNavy, width: 6),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _selected,
-                      initialZoom: 17,
-                      onTap: _onMapTap,
-                      onMapReady: () {
-                        _mapReady = true;
-                        _mapController.move(_selected, _mapController.camera.zoom);
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: const ['a', 'b', 'c'],
-                        userAgentPackageName: 'com.example.cloudcom_final',
-                      ),
-                      CircleLayer(
-                        circles: [
-                          CircleMarker(
-                            point: _selected,
-                            color: ThemeColors.deepNavy.withValues(alpha: 0.18),
-                            borderStrokeWidth: 2,
-                            borderColor: ThemeColors.deepNavy.withValues(alpha: 0.5),
-                            useRadiusInMeter: true,
-                            radius: _radiusMeters,
-                          ),
-                        ],
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _selected,
-                            width: 40,
-                            height: 40,
-                            alignment: Alignment.topCenter,
-                            child: const Icon(
-                              Icons.location_on,
-                              color: ThemeColors.pokeRed,
-                              size: 38,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+          child: ContentWidth(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SectionTitle('Monster details'),
+                  AppTextField(
+                    label: 'Monster Name',
+                    controller: _nameController,
+                    icon: Icons.pets,
+                    textInputAction: TextInputAction.next,
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name.' : null,
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Tap on the map to set the monster spawn point',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Text('Latitude: ${_selected.latitude.toStringAsFixed(6)}'),
-                    Text('Longitude: ${_selected.longitude.toStringAsFixed(6)}'),
-                    Text('Radius: ${_radiusMeters.toStringAsFixed(1)} meters'),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: 'Monster Type',
+                    hint: 'e.g. Fire, Water, Grass',
+                    controller: _typeController,
+                    icon: Icons.category_outlined,
+                    textInputAction: TextInputAction.next,
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a type.' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    label: 'Spawn Radius (meters)',
+                    controller: _radiusController,
+                    icon: Icons.radio_button_checked,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: _onRadiusChanged,
+                    validator: (v) {
+                      final radius = double.tryParse((v ?? '').trim());
+                      return radius == null || radius <= 0 ? 'Enter a number greater than 0.' : null;
+                    },
+                  ),
+                  const SizedBox(height: 22),
+                  SectionTitle(
+                    'Spawn point',
+                    trailing: TextButton.icon(
+                      onPressed: _locating ? null : _useCurrentLocation,
+                      icon: _locating
+                          ? const ButtonSpinner(color: ThemeColors.pokeBlue)
+                          : const Icon(Icons.my_location, size: 18),
+                      label: const Text('Use my location'),
+                    ),
+                  ),
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 300,
+                          child: FlutterMap(
+                            mapController: _mapController,
+                            options: MapOptions(
+                              initialCenter: _selected,
+                              initialZoom: 17,
+                              onTap: (_, point) => _moveTo(point),
+                              onMapReady: () {
+                                _mapReady = true;
+                                _mapController.move(_selected, _mapController.camera.zoom);
+                              },
+                            ),
+                            children: [
+                              osmTileLayer(),
+                              CircleLayer(
+                                circles: [
+                                  CircleMarker(
+                                    point: _selected,
+                                    color: ThemeColors.pokeRed.withValues(alpha: 0.15),
+                                    borderStrokeWidth: 2,
+                                    borderColor: ThemeColors.pokeRed.withValues(alpha: 0.6),
+                                    useRadiusInMeter: true,
+                                    radius: _radiusMeters,
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: _selected,
+                                    width: 44,
+                                    height: 44,
+                                    alignment: Alignment.topCenter,
+                                    child: const Icon(Icons.location_on, color: ThemeColors.pokeRed, size: 42),
+                                  ),
+                                ],
+                              ),
+                              osmAttribution(),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.touch_app_outlined, color: ThemeColors.textMuted, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Tap the map to move the spawn point.\n'
+                                  '${_selected.latitude.toStringAsFixed(6)}, ${_selected.longitude.toStringAsFixed(6)} · '
+                                  '${_radiusMeters.toStringAsFixed(0)} m radius',
+                                  style: const TextStyle(color: ThemeColors.textMuted, fontSize: 13, height: 1.4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    MessageBanner(message: _error!),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: _saving ? null : _saveMonster,
+                    icon: _saving ? const ButtonSpinner() : const Icon(Icons.save_outlined),
+                    label: Text(_saving ? 'Saving…' : 'Save Monster'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              _ActionButton(
-                label: _saving ? 'Saving...' : 'Save Monster',
-                icon: Icons.save_outlined,
-                onPressed: _saving ? null : _saveMonster,
-                filled: true,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.controller,
-    required this.hint,
-    this.onChanged,
-    this.keyboardType,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final String hint;
-  final void Function(String)? onChanged;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    const borderColor = Color(0xFFCBD8C9);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            hintText: hint,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: borderColor),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: ThemeColors.pokeYellow),
-            ),
-            filled: true,
-            fillColor: Colors.white,
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(label),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: filled ? ThemeColors.pokeYellow : Colors.white,
-          foregroundColor: filled ? Colors.black : ThemeColors.pokeBlue,
-          side: const BorderSide(color: ThemeColors.pokeBlue),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: filled ? 2 : 0,
         ),
       ),
     );

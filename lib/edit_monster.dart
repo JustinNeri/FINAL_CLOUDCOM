@@ -1,9 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+
 import 'api.dart';
+import 'caught_monsters.dart';
 import 'theme.dart';
-import 'package:http/http.dart' as http;
+import 'widgets.dart';
 
 class EditMonsterScreen extends StatefulWidget {
   const EditMonsterScreen({super.key, required this.playerId});
@@ -15,270 +15,103 @@ class EditMonsterScreen extends StatefulWidget {
 }
 
 class _EditMonsterScreenState extends State<EditMonsterScreen> {
-  late final TextEditingController _playerController;
-
-  bool submitting = false;
   bool loadingList = false;
   String loadError = '';
-  List<_Monster> caughtMonsters = [];
-
-  String get listEndpoint => '$apiBase/get_caught_monsters_api.php';
+  List<CaughtMonster> caughtMonsters = [];
 
   @override
   void initState() {
     super.initState();
-    _playerController = TextEditingController(text: widget.playerId);
     _loadCaughtMonsters();
   }
 
-  @override
-  void dispose() {
-    _playerController.dispose();
-    super.dispose();
-  }
-
   Future<void> _loadCaughtMonsters() async {
-    final playerId = _playerController.text.trim().isEmpty ? '1' : _playerController.text.trim();
-
     setState(() {
       loadingList = true;
       loadError = '';
     });
 
-    final url = Uri.parse('$listEndpoint?player_id=$playerId');
-
     try {
-      final resp = await http.get(url).timeout(const Duration(seconds: 10));
-      if (!mounted) return;
-      if (resp.statusCode == 200) {
-        final parsed = _parseList(resp.body);
-        final serverMsg = _extractServerMessage(resp.body);
-        if (parsed.isEmpty && serverMsg != null && serverMsg.isNotEmpty) {
-          setState(() => loadError = 'Server message: $serverMsg');
-          return;
-        }
-        setState(() => caughtMonsters = parsed);
-      } else {
-        setState(() => loadError = 'Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
-      }
+      final monsters = await fetchCaughtMonsters(widget.playerId);
+      if (mounted) setState(() => caughtMonsters = monsters);
     } catch (e) {
-      if (mounted) setState(() => loadError = 'Request failed: $e');
+      if (mounted) setState(() => loadError = errorText(e));
     } finally {
       if (mounted) setState(() => loadingList = false);
     }
   }
 
-  Future<void> _editMonster(_Monster monster, String newName, String newType) async {
-    final catchId = monster.catchId;
-    if (catchId.isEmpty) {
-      _show('Catch ID missing.');
-      return;
-    }
-
-    setState(() => submitting = true);
-
-    final url = Uri.parse('$apiBase/edit_monster_api.php');
-    final body = {
-      'catch_id': catchId,
-      'monster_id': monster.monsterId,
-      if (newName.trim().isNotEmpty) 'name': newName.trim(),
-      if (newType.trim().isNotEmpty) 'type': newType.trim(),
-    };
-
+  /// Sends the edit; returns an error message, or null on success.
+  Future<String?> _editMonster(CaughtMonster monster, String newName, String newType) async {
     try {
-      final resp = await http.post(url, body: body).timeout(const Duration(seconds: 10));
-      if (!mounted) return;
-      if (resp.statusCode == 200) {
-        final serverError = responseError(resp.body);
-        if (serverError != null) {
-          _show('Edit failed: $serverError');
-          return;
-        }
-        _show('Edit Successfully');
+      final resp = await apiPost('edit_monster_api.php', {
+        'catch_id': monster.catchId,
+        'monster_id': monster.monsterId,
+        if (newName.isNotEmpty) 'name': newName,
+        if (newType.isNotEmpty) 'type': newType,
+      });
+      if (resp.statusCode != 200) return 'Server error: ${resp.statusCode}\n${shortBody(resp.body)}';
+      final serverError = responseError(resp.body);
+      if (serverError != null) return serverError;
+
+      if (mounted) {
         setState(() {
-          caughtMonsters = caughtMonsters.map((m) {
-            if (m.catchId == monster.catchId) {
-              return m.copyWith(name: newName.trim().isEmpty ? m.name : newName.trim(), type: newType.trim().isEmpty ? m.type : newType.trim());
-            }
-            return m;
-          }).toList();
+          caughtMonsters = [
+            for (final m in caughtMonsters)
+              m.catchId == monster.catchId
+                  ? m.copyWith(name: newName.isEmpty ? null : newName, type: newType.isEmpty ? null : newType)
+                  : m,
+          ];
         });
-      } else {
-        _show('Server error: ${resp.statusCode}\n${_shortBody(resp.body)}');
       }
+      return null;
     } catch (e) {
-      _show('Request failed: $e');
-    } finally {
-      if (mounted) setState(() => submitting = false);
+      return requestErrorMessage(e);
     }
   }
 
-  void _openEditSheet(_Monster monster) {
-    final nameCtrl = TextEditingController(text: monster.name ?? '');
-    final typeCtrl = TextEditingController(text: monster.type ?? '');
-    String? sheetError;
-
-    showModalBottomSheet(
+  Future<void> _openEditSheet(CaughtMonster monster) async {
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) => Padding(
-            padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Edit ${monster.name ?? 'Monster'} (#${monster.monsterId})', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 12),
-                _Field(label: 'Monster Name', controller: nameCtrl),
-                const SizedBox(height: 10),
-                _Field(label: 'Monster Type', controller: typeCtrl),
-                if (sheetError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(sheetError!, style: const TextStyle(color: Colors.red)),
-                  ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      if (nameCtrl.text.trim().isEmpty && typeCtrl.text.trim().isEmpty) {
-                        setSheetState(() => sheetError = 'Enter a new name or type.');
-                        return;
-                      }
-                      Navigator.of(ctx).pop();
-                      await _editMonster(monster, nameCtrl.text, typeCtrl.text);
-                    },
-                    icon: const Icon(Icons.save_outlined, color: Colors.black),
-                    label: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Save Changes')),
-                    style: ElevatedButton.styleFrom(backgroundColor: ThemeColors.pokeYellow, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (_) => _EditMonsterSheet(
+        monster: monster,
+        onSave: (name, type) => _editMonster(monster, name, type),
+      ),
     );
-  }
-
-  void _show(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monster updated.')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        title: const Text('Edit Monsters', style: TextStyle(color: ThemeColors.deepNavy)),
-        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
-            ),
-          ),
-        ),
+        title: const Text('Edit Monsters'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeRed,
-              child: const Icon(Icons.edit_outlined, color: Colors.white),
-            ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: loadingList ? null : _loadCaughtMonsters,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Caught monsters for this player. Tap edit to change name or type.'),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: _Field(label: 'Player ID', controller: _playerController, keyboard: TextInputType.number, readOnly: true),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton.icon(
-                    onPressed: loadingList ? null : _loadCaughtMonsters,
-                    icon: loadingList ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.refresh, color: Colors.black),
-                    label: const Text('Refresh'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.pokeYellow,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(120, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (loadError.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red[200]!)),
-                  child: Text(loadError),
-                ),
-              if (loadingList)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: CircularProgressIndicator())),
-              if (!loadingList && loadError.isEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Caught Monsters (${caughtMonsters.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    if (caughtMonsters.isEmpty) const Text('No caught monsters yet.'),
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: caughtMonsters.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final m = caughtMonsters[index];
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[300]!)),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(m.name ?? 'Monster ${m.monsterId}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 6),
-                                    Text(m.type ?? 'Unknown type', style: const TextStyle(color: Colors.black87)),
-                                  ],
-                                ),
-                              ),
-                              ElevatedButton.icon(onPressed: submitting ? null : () => _openEditSheet(m), icon: const Icon(Icons.edit_outlined), label: const Text('Edit'), style: TextButton.styleFrom(foregroundColor: baseGreen)),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-            ],
+        child: CaughtMonsterListView(
+          loading: loadingList,
+          error: loadError,
+          monsters: caughtMonsters,
+          onRefresh: _loadCaughtMonsters,
+          intro: 'Tap a monster to change its name or type.',
+          itemBuilder: (m) => CaughtMonsterTile(
+            monster: m,
+            onTap: () => _openEditSheet(m),
+            trailing: IconButton(
+              tooltip: 'Edit ${m.displayName}',
+              onPressed: () => _openEditSheet(m),
+              icon: const Icon(Icons.edit_outlined, color: ThemeColors.pokeBlue),
+            ),
           ),
         ),
       ),
@@ -286,105 +119,93 @@ class _EditMonsterScreenState extends State<EditMonsterScreen> {
   }
 }
 
-class _Monster {
-  _Monster({required this.catchId, required this.monsterId, this.name, this.type, this.lat, this.lon, this.radius, this.caughtAt});
+/// Bottom sheet form for renaming a monster. Pops with true once saved.
+class _EditMonsterSheet extends StatefulWidget {
+  const _EditMonsterSheet({required this.monster, required this.onSave});
 
-  final String catchId;
-  final String monsterId;
-  final String? name;
-  final String? type;
-  final String? lat;
-  final String? lon;
-  final String? radius;
-  final String? caughtAt;
+  final CaughtMonster monster;
+  final Future<String?> Function(String name, String type) onSave;
 
-  _Monster copyWith({String? name, String? type}) {
-    return _Monster(catchId: catchId, monsterId: monsterId, name: name ?? this.name, type: type ?? this.type, lat: lat, lon: lon, radius: radius, caughtAt: caughtAt);
-  }
-
-  factory _Monster.fromMap(Map<String, dynamic> map) {
-    return _Monster(
-      catchId: map['catch_id']?.toString() ?? '',
-      monsterId: map['monster_id']?.toString() ?? '',
-      name: map['monster_name']?.toString(),
-      type: map['monster_type']?.toString(),
-      lat: map['lat']?.toString() ?? map['latitude']?.toString(),
-      lon: map['lon']?.toString() ?? map['longitude']?.toString(),
-      radius: map['radius']?.toString(),
-      caughtAt: map['caught_at']?.toString(),
-    );
-  }
+  @override
+  State<_EditMonsterSheet> createState() => _EditMonsterSheetState();
 }
 
-List<_Monster> _parseList(String body) {
-  try {
-    final data = json.decode(body);
-    List list;
-    if (data is List) {
-      list = data;
-    } else if (data is Map && data['data'] is List) {
-      list = data['data'];
+class _EditMonsterSheetState extends State<_EditMonsterSheet> {
+  late final TextEditingController _nameCtrl = TextEditingController(text: widget.monster.name ?? '');
+  late final TextEditingController _typeCtrl = TextEditingController(text: widget.monster.type ?? '');
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _typeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    final type = _typeCtrl.text.trim();
+    if (name.isEmpty && type.isEmpty) {
+      setState(() => _error = 'Enter a new name or type.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final error = await widget.onSave(name, type);
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.of(context).pop(true);
     } else {
-      return [];
+      setState(() {
+        _saving = false;
+        _error = error;
+      });
     }
-    return list.whereType<Map>().map((m) => _Monster.fromMap(Map<String, dynamic>.from(m))).where((m) => m.catchId.isNotEmpty).toList();
-  } catch (_) {
-    return [];
   }
-}
-
-String _shortBody(String body) {
-  final clean = body.trim();
-  if (clean.isEmpty) return '(empty response body)';
-  if (clean.length <= 240) return clean;
-  return '${clean.substring(0, 240)}...';
-}
-
-String? _extractServerMessage(String body) {
-  try {
-    final data = json.decode(body);
-    if (data is Map<String, dynamic>) {
-      final err = data['error']?.toString();
-      if (err != null && err.trim().isNotEmpty) return err;
-      final msg = data['message']?.toString();
-      if (msg != null && msg.trim().isNotEmpty) return msg;
-    }
-  } catch (_) {
-    // Ignore parse errors and fallback to generic handling.
-  }
-  return null;
-}
-
-class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.controller, this.keyboard, this.readOnly = false});
-
-  final String label;
-  final TextEditingController controller;
-  final TextInputType? keyboard;
-  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
-    const borderColor = Color(0xFFCBD8C9);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          keyboardType: keyboard,
-          readOnly: readOnly,
-          decoration: InputDecoration(
-            hintText: label,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: borderColor)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: ThemeColors.pokeYellow)),
-            filled: true,
-            fillColor: Colors.white,
-          ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: ContentWidth(
+        maxWidth: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Edit ${widget.monster.displayName}',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+            const SizedBox(height: 4),
+            Text('Monster #${widget.monster.monsterId}', style: const TextStyle(color: ThemeColors.textMuted)),
+            const SizedBox(height: 18),
+            AppTextField(label: 'Monster Name', controller: _nameCtrl, icon: Icons.pets, textInputAction: TextInputAction.next),
+            const SizedBox(height: 12),
+            AppTextField(
+              label: 'Monster Type',
+              controller: _typeCtrl,
+              icon: Icons.category_outlined,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _saving ? null : _save(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              MessageBanner(message: _error!),
+            ],
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving ? const ButtonSpinner() : const Icon(Icons.save_outlined),
+              label: const Text('Save Changes'),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

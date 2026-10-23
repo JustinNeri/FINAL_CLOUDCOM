@@ -1,316 +1,248 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'theme.dart';
-import 'package:http/http.dart' as http;
 
 import 'api.dart';
+import 'instance_status.dart';
+import 'theme.dart';
+import 'widgets.dart';
 
 class InstanceScreen extends StatefulWidget {
-  const InstanceScreen({super.key, required this.initialStatus});
+  const InstanceScreen({
+    super.key,
+    required this.initialState,
+    this.pollInterval = const Duration(seconds: 5),
+  });
 
-  final bool initialStatus;
+  final InstanceState initialState;
+
+  /// How often to re-check the status while the server is starting or stopping.
+  final Duration pollInterval;
 
   @override
   State<InstanceScreen> createState() => _InstanceScreenState();
 }
 
 class _InstanceScreenState extends State<InstanceScreen> {
-  late bool instanceOn;
-  bool isLoading = false;
-  String? error;
-  bool initialFetchDone = false;
+  /// Give up polling after this many checks (about 3 minutes at 5 s).
+  static const _maxPolls = 36;
+
+  late InstanceState _state = widget.initialState;
+  bool _checking = false;
+  bool _sending = false;
+  String? _error;
+  DateTime? _lastChecked;
+  Timer? _pollTimer;
+  int _polls = 0;
 
   @override
   void initState() {
     super.initState();
-    instanceOn = widget.initialStatus;
     _refreshStatus();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return PopScope<bool>(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        // Hand the current status back to the dashboard on system back too.
-        if (!didPop) Navigator.of(context).pop(instanceOn);
-      },
-      child: Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        title: const Text('Instance Control', style: TextStyle(color: ThemeColors.deepNavy)),
-        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(instanceOn),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
-            ),
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.power_settings_new, color: ThemeColors.deepNavy),
-            ),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF5FAF4), Color(0xFFE8F1E6)],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Toggle the instance to enable or pause catching and detection flows.',
-                  style: TextStyle(fontSize: 14, height: 1.4),
-                ),
-                const SizedBox(height: 16),
-                if (!initialFetchDone && isLoading)
-                  Row(
-                    children: const [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 8),
-                      Text('Loading instance status...'),
-                    ],
-                  ),
-                if (initialFetchDone)
-                  Center(
-                    child: LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        final size = (constraints.maxWidth < 600) ? constraints.maxWidth * 0.9 : 520.0;
-                        final containerWidth = (size < 420) ? size * 0.9 : 420.0;
-                        return Container(
-                          width: containerWidth,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 6)),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Instance Status',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: ThemeColors.deepNavy,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (instanceOn) ...[
-                                    Icon(Icons.flash_on, color: ThemeColors.pokeYellow, size: 20),
-                                    const SizedBox(width: 8),
-                                    Text('Online', style: TextStyle(color: ThemeColors.deepNavy, fontWeight: FontWeight.w700, fontSize: 16)),
-                                  ] else ...[
-                                    Text('Offline', style: TextStyle(color: ThemeColors.pokeRed, fontWeight: FontWeight.w700, fontSize: 16)),
-                                  ]
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                              // Standard left-right Switch inside a Pokemon-themed container
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: ThemeColors.pokeBlue.withValues(alpha: 0.06),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.power_settings_new, color: instanceOn ? ThemeColors.pokeYellow : ThemeColors.pokeRed),
-                                    const SizedBox(width: 8),
-                                    Switch.adaptive(
-                                      value: instanceOn,
-                                      onChanged: (v) => _updateInstance(v, ThemeColors.pokeBlue),
-                                      activeThumbColor: ThemeColors.pokeYellow,
-                                      activeTrackColor: ThemeColors.pokeBlue.withValues(alpha: 0.6),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                instanceOn ? 'All systems nominal' : 'Paused for maintenance',
-                                style: TextStyle(color: ThemeColors.deepNavy.withValues(alpha: 0.72), fontSize: 13),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                if (isLoading && initialFetchDone)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Row(
-                      children: const [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 8),
-                        Text('Updating instance...'),
-                      ],
-                    ),
-                  ),
-                if (error != null && !isLoading)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      error!,
-                      style: const TextStyle(color: Colors.redAccent),
-                    ),
-                  ),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.pokeYellow,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(instanceOn),
-                    icon: const Icon(Icons.check_circle_outline, color: Colors.black),
-                    label: const Text('Save status'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ));
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _refreshStatus() async {
+    if (_checking) return;
     setState(() {
-      isLoading = true;
-      error = null;
+      _checking = true;
+      _error = null;
     });
 
     try {
-      final resp = await _callApi('status');
+      final resp = await callInstanceApi('status');
       if (!mounted) return;
-      final body = resp.body.toLowerCase();
-      final running = body.contains('running') || body.contains('online') || body.contains('started');
-      // A stopping instance is going down, so it counts as offline.
-      final stopping = body.contains('stopping') || body.contains('shutting');
-      final stopped = body.contains('stopped') || body.contains('offline');
-      final newState = stopping ? false : running ? true : stopped ? false : instanceOn;
+      final parsed = parseInstanceState(resp.body);
       setState(() {
-        instanceOn = newState;
-        initialFetchDone = true;
+        // While waiting for a start/stop, an unreadable reply keeps the transition shown.
+        if (!(parsed == InstanceState.unknown && _state.isTransitioning)) _state = parsed;
+        _lastChecked = DateTime.now();
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        error = 'Error: $e';
-        initialFetchDone = true;
-      });
+      if (mounted) setState(() => _error = requestErrorMessage(e));
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _checking = false);
     }
+
+    if (mounted && !_state.isTransitioning) _stopPolling();
   }
 
-  Future<void> _updateInstance(bool targetState, Color baseGreen) async {
-    if (isLoading) return;
-    setState(() {
-      isLoading = true;
-      error = null;
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _polls = 0;
+    _pollTimer = Timer.periodic(widget.pollInterval, (_) {
+      _polls++;
+      if (_polls > _maxPolls) {
+        _stopPolling();
+        setState(() => _error = 'The server is taking longer than expected. Refresh to check again.');
+        return;
+      }
+      _refreshStatus();
     });
+  }
 
-    final action = targetState ? 'start' : 'stop';
-    try {
-      await _callApi(action);
-      if (!mounted) return;
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
 
-      setState(() {
-        instanceOn = targetState;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Instance ${action == 'start' ? 'started' : 'stopped'}'),
-          backgroundColor: baseGreen,
+  Future<void> _sendAction(String action) async {
+    if (action == 'stop') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Stop the server?'),
+          content: const Text('Players will not be able to detect or catch monsters until it is started again.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: ThemeColors.pokeRed),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Stop server'),
+            ),
+          ],
         ),
       );
-    } catch (e) {
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+
+    try {
+      await callInstanceApi(action);
       if (!mounted) return;
-      setState(() {
-        error = 'Error: $e';
-      });
+      setState(() => _state = action == 'start' ? InstanceState.starting : InstanceState.stopping);
+      _startPolling();
+    } catch (e) {
+      if (mounted) setState(() => _error = requestErrorMessage(e));
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _sending = false);
     }
   }
 
-  Future<http.Response> _callApi(String action) async {
-    final uri = Uri.parse(instanceApi).replace(queryParameters: {'action': action});
-    http.Response? lastResponse;
+  @override
+  Widget build(BuildContext context) {
+    final busy = _sending || _state.isTransitioning;
 
-    // Try POST first (include action in both body and query to handle non-proxy integrations)
-    try {
-      final resp = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'action': action}),
-      );
-      if (resp.statusCode == 200) return resp;
-      lastResponse = resp;
-    } catch (e) {
-      // swallow and attempt GET below
-      lastResponse = null;
-    }
-
-    // Fallback to GET with query param
-    final getResp = await http.get(uri);
-    if (getResp.statusCode == 200) return getResp;
-
-    final msg = lastResponse != null
-      ? 'POST failed: ${lastResponse.statusCode} ${lastResponse.body} | GET failed: ${getResp.statusCode} ${getResp.body}'
-      : 'POST error then GET failed: ${getResp.statusCode} ${getResp.body}';
-    throw Exception(msg);
+    return PopScope<InstanceState>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        // Hand the latest state back to the dashboard on any back action.
+        if (!didPop) Navigator.of(context).pop(_state);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Server Instance'),
+          actions: [
+            IconButton(
+              tooltip: 'Refresh status',
+              onPressed: _checking ? null : _refreshStatus,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ContentWidth(
+              maxWidth: 520,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+                      child: Column(
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: Container(
+                              key: ValueKey(_state),
+                              width: 96,
+                              height: 96,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _state.color.withValues(alpha: 0.12),
+                                border: Border.all(color: _state.color.withValues(alpha: 0.4), width: 3),
+                              ),
+                              child: Icon(_state.icon, color: _state.color, size: 46),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              _state.label,
+                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _state.color),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _state.description,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: ThemeColors.textMuted, height: 1.4),
+                          ),
+                          if (_state.isTransitioning) ...[
+                            const SizedBox(height: 18),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(minHeight: 6, color: _state.color),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('Checking every few seconds…', style: TextStyle(color: ThemeColors.textMuted, fontSize: 12)),
+                          ],
+                          const SizedBox(height: 12),
+                          Text(
+                            _checking
+                                ? 'Checking status…'
+                                : _lastChecked == null
+                                    ? 'Not checked yet'
+                                    : 'Last checked at ${TimeOfDay.fromDateTime(_lastChecked!).format(context)}',
+                            style: const TextStyle(color: ThemeColors.textMuted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    MessageBanner(message: _error!, onRetry: _refreshStatus),
+                  ],
+                  const SizedBox(height: 20),
+                  if (_state != InstanceState.running)
+                    FilledButton.icon(
+                      onPressed: busy ? null : () => _sendAction('start'),
+                      icon: _sending ? const ButtonSpinner() : const Icon(Icons.play_arrow_rounded),
+                      label: const Text('Start server'),
+                    ),
+                  if (_state != InstanceState.running && _state != InstanceState.stopped)
+                    const SizedBox(height: 10),
+                  if (_state != InstanceState.stopped)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(foregroundColor: ThemeColors.pokeRed),
+                      onPressed: busy ? null : () => _sendAction('stop'),
+                      icon: const Icon(Icons.stop_rounded),
+                      label: const Text('Stop server'),
+                    ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(_state),
+                    child: const Text('Back to dashboard'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

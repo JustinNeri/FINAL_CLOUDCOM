@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'api.dart';
-import 'theme.dart';
-import 'package:http/http.dart' as http;
 
+import 'api.dart';
 import 'auth_models.dart';
+import 'login_screen.dart' show validateUsername, validateNewPassword;
+import 'theme.dart';
+import 'widgets.dart';
 
 class PlayerAccountsScreen extends StatefulWidget {
   const PlayerAccountsScreen({
@@ -22,279 +23,199 @@ class PlayerAccountsScreen extends StatefulWidget {
 }
 
 class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
-
   bool loading = false;
   String error = '';
-  List<PlayerProfile> players = [];
+  late PlayerProfile _profile = widget.currentPlayer;
 
   @override
   void initState() {
     super.initState();
-    _loadPlayers();
+    _loadProfile();
   }
 
-  Future<void> _loadPlayers() async {
+  /// Refreshes the profile from the server. The backend only offers a list of
+  /// all players, so this picks the signed-in player out of it.
+  Future<void> _loadProfile() async {
     setState(() {
       loading = true;
       error = '';
     });
 
-    final endpoints = [
-      '$apiBase/list_players_api.php',
-      '$apiBase/list_player_api.php',
-    ];
-
-    http.Response? resp;
+    const endpoints = ['list_players_api.php', 'list_player_api.php'];
 
     try {
+      String? body;
+      var lastStatus = 0;
       for (final endpoint in endpoints) {
-        final candidate = await http
-            .get(Uri.parse(endpoint))
-            .timeout(const Duration(seconds: 10));
-
-        if (candidate.statusCode == 200) {
-          resp = candidate;
+        final resp = await apiGet(endpoint);
+        if (resp.statusCode == 200) {
+          body = resp.body;
           break;
         }
+        lastStatus = resp.statusCode;
       }
+      if (!mounted) return;
 
-      if (resp == null) {
-        final lastEndpoint = endpoints.last;
-        final lastResp = await http
-            .get(Uri.parse(lastEndpoint))
-            .timeout(const Duration(seconds: 10));
-        setState(() =>
-            error = 'Load failed: ${lastResp.statusCode}\nEndpoint: $lastEndpoint\n${_shortBody(lastResp.body)}');
+      if (body == null) {
+        setState(() => error = 'Could not refresh your profile ($lastStatus).');
         return;
       }
 
-      final decoded = json.decode(resp.body);
-      List list;
-      if (decoded is List) {
-        list = decoded;
-      } else if (decoded is Map && decoded['data'] is List) {
-        list = decoded['data'];
-      } else {
-        list = [];
-      }
-
-      setState(() {
-        players = list
-            .whereType<Map>()
-            .map((e) => PlayerProfile.fromMap(Map<String, dynamic>.from(e)))
-            .where((p) => p.id.isNotEmpty || p.username.isNotEmpty)
-            .toList();
-        error = '';
-      });
+      final players = (decodeList(body) ?? []).map(PlayerProfile.fromMap);
+      final match = players.where((p) => p.id == widget.currentPlayer.id);
+      if (match.isNotEmpty) setState(() => _profile = match.first);
     } catch (e) {
-      if (mounted) setState(() => error = 'Request failed: $e');
+      if (mounted) setState(() => error = requestErrorMessage(e));
     } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
-  Future<void> _openEditDialog(PlayerProfile profile) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _EditPlayerDialog(
-        profile: profile,
-        onSave: (username, playerName, password) => _updatePlayer(
-          playerId: profile.id,
-          username: username,
-          playerName: playerName,
-          password: password,
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _updatePlayer({
-    required String playerId,
+  /// Saves the profile; returns an error message, or null on success.
+  Future<String?> _updatePlayer({
     required String username,
     required String playerName,
     required String password,
   }) async {
     try {
       final newPassword = password.trim();
-      final body = {
-        'player_id': playerId,
+      final resp = await apiPost('update_player_api.php', {
+        'player_id': _profile.id,
         'username': username,
         'player_name': playerName,
         // Support multiple backend parameter names for password updates.
         if (newPassword.isNotEmpty) 'password': newPassword,
         if (newPassword.isNotEmpty) 'new_password': newPassword,
         if (newPassword.isNotEmpty) 'player_password': newPassword,
-      };
+      });
 
-      final resp = await http.post(
-        Uri.parse('$apiBase/update_player_api.php'),
-        body: body,
-      ).timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return 'Update failed (${resp.statusCode}).';
+      final serverError = responseError(resp.body);
+      if (serverError != null) return serverError;
 
-      if (resp.statusCode == 200) {
-        final serverError = responseError(resp.body);
-        if (serverError != null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Update failed: $serverError')),
-            );
-          }
-          return false;
+      int? affectedRows;
+      try {
+        final data = json.decode(resp.body);
+        if (data is Map<String, dynamic>) {
+          affectedRows = int.tryParse(data['affected_rows']?.toString() ?? '');
         }
-
-        int? affectedRows;
-        try {
-          final data = json.decode(resp.body);
-          if (data is Map<String, dynamic>) {
-            affectedRows = int.tryParse(data['affected_rows']?.toString() ?? '');
-          }
-        } catch (_) {
-          // Keep legacy behavior when response is not JSON.
-        }
-
-        final passwordWasRequested = newPassword.isNotEmpty;
-        if (passwordWasRequested && affectedRows == 0) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Password was not updated by the server. Please update update_player_api.php backend logic.'),
-              ),
-            );
-          }
-          return false;
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Player updated.')),
-          );
-        }
-
-        final updatedProfile = PlayerProfile(
-          id: playerId,
-          username: username,
-          name: playerName,
-        );
-        widget.onProfileUpdated(updatedProfile);
-
-        await _loadPlayers();
-        return true;
+      } on FormatException {
+        // Keep legacy behavior when response is not JSON.
+      }
+      if (newPassword.isNotEmpty && affectedRows == 0) {
+        return 'The server did not change the password. Check update_player_api.php.';
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Update failed: ${resp.statusCode}')),
-        );
-      }
-      return false;
+      final updated = PlayerProfile(id: _profile.id, username: username, name: playerName);
+      widget.onProfileUpdated(updated);
+      if (mounted) setState(() => _profile = updated);
+      return null;
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Request failed: $e')),
-        );
-      }
-      return false;
+      return requestErrorMessage(e);
+    }
+  }
+
+  Future<void> _openEditDialog() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => _EditPlayerDialog(
+        profile: _profile,
+        onSave: (username, playerName, password) => _updatePlayer(
+          username: username,
+          playerName: playerName,
+          password: password,
+        ),
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated.')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const baseGreen = ThemeColors.deepNavy;
-    final currentPlayer = players.where((p) => p.id == widget.currentPlayer.id).isNotEmpty
-        ? players.firstWhere((p) => p.id == widget.currentPlayer.id)
-        : widget.currentPlayer;
+    final initial = _profile.displayName.isNotEmpty ? _profile.displayName[0].toUpperCase() : '?';
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: baseGreen,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('My Account', style: TextStyle(color: Colors.white)),
+        title: const Text('My Account'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: loading ? null : _loadProfile,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: loading ? null : _loadPlayers,
-                    icon: loading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.refresh, color: Colors.black),
-                    label: const Text('Refresh'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.pokeYellow,
-                      foregroundColor: Colors.black,
-                      minimumSize: const Size(120, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: ContentWidth(
+            maxWidth: 560,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 42,
+                          backgroundColor: ThemeColors.pokeYellow,
+                          child: Text(
+                            initial,
+                            style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: ThemeColors.deepNavy),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(_profile.displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text('@${_profile.username}', style: const TextStyle(color: ThemeColors.textMuted)),
+                        if (loading) ...[
+                          const SizedBox(height: 14),
+                          const LinearProgressIndicator(minHeight: 3),
+                        ],
+                      ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (error.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.red[200]!),
-                  ),
-                  child: Text(error),
                 ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        currentPlayer.username,
-                                        style: const TextStyle(fontWeight: FontWeight.w700),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text('Player ID: ${currentPlayer.id}'),
-                                      if ((currentPlayer.name ?? '').isNotEmpty)
-                                        Text('Name: ${currentPlayer.name}'),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: () => _openEditDialog(currentPlayer),
-                                  icon: const Icon(Icons.edit_outlined),
-                                  tooltip: 'Update',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  MessageBanner(message: error, onRetry: _loadProfile),
+                ],
+                const SizedBox(height: 16),
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.badge_outlined),
+                        title: const Text('Player name'),
+                        subtitle: Text(_profile.name?.isNotEmpty == true ? _profile.name! : 'Not set'),
                       ),
-              ),
-            ],
+                      const Divider(indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.alternate_email),
+                        title: const Text('Username'),
+                        subtitle: Text(_profile.username),
+                      ),
+                      const Divider(indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.tag),
+                        title: const Text('Trainer ID'),
+                        subtitle: Text(_profile.id),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _openEditDialog,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit profile or password'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -302,22 +223,24 @@ class _PlayerAccountsScreenState extends State<PlayerAccountsScreen> {
   }
 }
 
+/// Dialog for changing username, player name and (optionally) password.
+/// Pops with true once saved.
 class _EditPlayerDialog extends StatefulWidget {
   const _EditPlayerDialog({required this.profile, required this.onSave});
 
   final PlayerProfile profile;
-  final Future<bool> Function(String username, String playerName, String password) onSave;
+  final Future<String?> Function(String username, String playerName, String password) onSave;
 
   @override
   State<_EditPlayerDialog> createState() => _EditPlayerDialogState();
 }
 
 class _EditPlayerDialogState extends State<_EditPlayerDialog> {
-  late final TextEditingController _usernameCtrl =
-      TextEditingController(text: widget.profile.username);
-  late final TextEditingController _nameCtrl =
-      TextEditingController(text: widget.profile.name ?? '');
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _usernameCtrl = TextEditingController(text: widget.profile.username);
+  late final TextEditingController _nameCtrl = TextEditingController(text: widget.profile.name ?? '');
   final TextEditingController _passwordCtrl = TextEditingController();
+  final TextEditingController _confirmCtrl = TextEditingController();
 
   bool _saving = false;
   String? _error;
@@ -327,119 +250,90 @@ class _EditPlayerDialogState extends State<_EditPlayerDialog> {
     _usernameCtrl.dispose();
     _nameCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final username = _usernameCtrl.text.trim();
-    if (username.isEmpty) {
-      setState(() => _error = 'Username cannot be empty.');
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _saving = true;
       _error = null;
     });
-    final ok = await widget.onSave(username, _nameCtrl.text.trim(), _passwordCtrl.text);
+    final error = await widget.onSave(_usernameCtrl.text.trim(), _nameCtrl.text.trim(), _passwordCtrl.text);
     if (!mounted) return;
-    if (ok) {
-      Navigator.of(context).pop();
+    if (error == null) {
+      Navigator.of(context).pop(true);
     } else {
-      setState(() => _saving = false);
+      setState(() {
+        _saving = false;
+        _error = error;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Update Player'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _DialogField(label: 'Username', controller: _usernameCtrl),
-            _DialogField(label: 'Player Name', controller: _nameCtrl),
-            _DialogField(
-              label: 'New Password (optional)',
-              controller: _passwordCtrl,
-              obscureText: true,
+      title: const Text('Edit profile'),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppTextField(
+                  label: 'Username',
+                  controller: _usernameCtrl,
+                  icon: Icons.alternate_email,
+                  // Existing usernames predate the rules, so only check changed ones.
+                  validator: (v) => v?.trim() == widget.profile.username ? null : validateUsername(v),
+                ),
+                const SizedBox(height: 12),
+                AppTextField(label: 'Player Name', controller: _nameCtrl, icon: Icons.badge_outlined),
+                const SizedBox(height: 20),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Change password (optional)', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 10),
+                AppTextField(
+                  label: 'New Password',
+                  controller: _passwordCtrl,
+                  icon: Icons.lock_outline,
+                  obscureText: true,
+                  validator: (v) => (v ?? '').isEmpty ? null : validateNewPassword(v),
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Confirm New Password',
+                  controller: _confirmCtrl,
+                  icon: Icons.lock_reset,
+                  obscureText: true,
+                  validator: (v) => v != _passwordCtrl.text ? 'Passwords do not match.' : null,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  MessageBanner(message: _error!),
+                ],
+              ],
             ),
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving...' : 'Save'),
+          child: _saving ? const ButtonSpinner() : const Text('Save'),
         ),
       ],
     );
   }
-}
-
-class _DialogField extends StatefulWidget {
-  const _DialogField({
-    required this.label,
-    required this.controller,
-    this.obscureText = false,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final bool obscureText;
-
-  @override
-  State<_DialogField> createState() => _DialogFieldState();
-}
-
-class _DialogFieldState extends State<_DialogField> {
-  late bool _isObscured;
-
-  @override
-  void initState() {
-    super.initState();
-    _isObscured = widget.obscureText;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: widget.controller,
-        obscureText: _isObscured,
-        enableSuggestions: !widget.obscureText,
-        autocorrect: !widget.obscureText,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          suffixIcon: widget.obscureText
-              ? IconButton(
-                  onPressed: () {
-                    setState(() => _isObscured = !_isObscured);
-                  },
-                  icon: Icon(
-                    _isObscured ? Icons.visibility : Icons.visibility_off,
-                  ),
-                )
-              : null,
-          isDense: true,
-        ),
-      ),
-    );
-  }
-}
-
-String _shortBody(String body) {
-  final clean = body.trim();
-  if (clean.isEmpty) return '(empty response body)';
-  if (clean.length <= 240) return clean;
-  return '${clean.substring(0, 240)}...';
 }

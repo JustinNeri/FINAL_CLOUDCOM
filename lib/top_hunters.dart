@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import 'api.dart';
 import 'theme.dart';
-import 'package:http/http.dart' as http;
+import 'widgets.dart';
 
 class TopHuntersScreen extends StatefulWidget {
   const TopHuntersScreen({super.key, this.currentPlayerId});
@@ -15,10 +16,9 @@ class TopHuntersScreen extends StatefulWidget {
 }
 
 class _TopHuntersScreenState extends State<TopHuntersScreen> {
-
   bool loading = false;
   String error = '';
-  List<_HunterStat> hunters = [];
+  List<HunterStat> hunters = [];
 
   @override
   void initState() {
@@ -32,246 +32,79 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
       error = '';
     });
 
-    final endpoints = [
-      '$apiBase/view_top_hunters_api.php',
-    ];
-
-    http.Response? successResp;
-    final failures = <String>[];
-
-    for (final endpoint in endpoints) {
-      try {
-        final resp = await http.get(Uri.parse(endpoint)).timeout(const Duration(seconds: 10));
-        if (resp.statusCode == 200) {
-          successResp = resp;
-          break;
-        }
-        failures.add('$endpoint -> ${resp.statusCode}');
-      } catch (e) {
-        failures.add('$endpoint -> $e');
-      }
-    }
-
-    if (!mounted) return;
-    if (successResp == null) {
-      setState(() {
-        loading = false;
-        error = failures.isEmpty
-            ? 'No response from leaderboard API.'
-            : 'Failed endpoints:\n${failures.join('\n')}';
-      });
-      return;
-    }
-
     try {
-      final parsed = _parseHunterStats(successResp.body);
-      setState(() {
-        hunters = parsed;
-      });
-    } catch (e) {
-      setState(() => error = 'Parse error: $e');
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
+      final resp = await apiGet('view_top_hunters_api.php');
+      if (!mounted) return;
+      if (resp.statusCode != 200) {
+        setState(() => error = 'Could not load the leaderboard (${resp.statusCode}).');
+        return;
       }
+      setState(() => hunters = parseHunterStats(resp.body));
+    } on FormatException catch (e) {
+      if (mounted) setState(() => error = 'Parse error: ${e.message}');
+    } catch (e) {
+      if (mounted) setState(() => error = requestErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final ownerId = widget.currentPlayerId?.trim();
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        title: const Text('View Top Monster Hunters', style: TextStyle(color: ThemeColors.deepNavy)),
-        iconTheme: const IconThemeData(color: ThemeColors.deepNavy),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.arrow_back, color: ThemeColors.deepNavy),
-            ),
-          ),
-        ),
+        title: const Text('Top Hunters'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: CircleAvatar(
-              backgroundColor: ThemeColors.pokeYellow,
-              child: const Icon(Icons.emoji_events_outlined, color: ThemeColors.deepNavy),
-            ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: loading ? null : _loadTopHunters,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: RefreshIndicator(
+          onRefresh: _loadTopHunters,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              const Text('Leaderboard of players by total monster catches.'),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: loading ? null : _loadTopHunters,
-                    icon: loading
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                        : const Icon(Icons.refresh, color: Colors.black),
-                    label: const Text('Refresh'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.pokeYellow,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(120, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (error.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.red[200]!),
-                  ),
-                  child: Text(error),
-                ),
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              if (!loading && error.isEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ContentWidth(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Top Hunters (${hunters.length})',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    if (hunters.isEmpty)
-                      const Text('No catches found yet.'),
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: hunters.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                                            final h = hunters[index];
-                                            final rank = index + 1;
-                                            final ownerId = widget.currentPlayerId?.trim();
-                                            final hunterId = h.playerId.trim();
-                                            final isOwner = ownerId != null && ownerId.isNotEmpty && ownerId == hunterId;
-                        return Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: isOwner ? ThemeColors.pokeYellow : Colors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(color: isOwner ? ThemeColors.pokeYellow.withValues(alpha: 0.9) : Colors.grey[300]!, width: isOwner ? 1.6 : 1.0),
-                                                boxShadow: isOwner ? [BoxShadow(color: ThemeColors.pokeYellow.withValues(alpha: 0.16), blurRadius: 14, offset: const Offset(0,6))] : null,
-                                              ),
-                          child: Row(
-                            children: [
-                                                      if (rank == 1)
-                                                        Container(
-                                                          width: 46,
-                                                          height: 46,
-                                                          decoration: BoxDecoration(
-                                                            shape: BoxShape.circle,
-                                                            gradient: const LinearGradient(colors: [ThemeColors.pokeYellow, ThemeColors.pokeBlue]),
-                                                            boxShadow: [BoxShadow(color: ThemeColors.pokeYellow.withValues(alpha: 0.2), blurRadius: 6)],
-                                                          ),
-                                                          child: const Center(child: Icon(Icons.emoji_events, color: Colors.white)),
-                                                        )
-                                                      else if (rank == 2)
-                                                        Container(
-                                                          width: 46,
-                                                          height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withValues(alpha: 0.9)),
-                                                          child: const Center(child: Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
-                                                        )
-                                                      else if (rank == 3)
-                                                        Container(
-                                                          width: 46,
-                                                          height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeRed.withValues(alpha: 0.9)),
-                                                          child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
-                                                        )
-                                                      else
-                                                        Container(
-                                                          width: 46,
-                                                          height: 46,
-                                                          decoration: BoxDecoration(shape: BoxShape.circle, color: ThemeColors.pokeBlue.withValues(alpha: 0.08)),
-                                                          child: Center(
-                                                            child: Text(
-                                                              '$rank',
-                                                              textAlign: TextAlign.center,
-                                                              style: const TextStyle(
-                                                                fontWeight: FontWeight.w700,
-                                                                color: ThemeColors.deepNavy,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                                        Row(
-                                                          children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                h.playerName ?? 'Player ${h.playerId}',
-                                                                style: TextStyle(fontWeight: FontWeight.w800, color: ThemeColors.deepNavy),
-                                                              ),
-                                                            ),
-                                                            if (isOwner)
-                                                              Container(
-                                                                margin: const EdgeInsets.only(left: 8),
-                                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                                decoration: BoxDecoration(
-                                                                  color: ThemeColors.pokeYellow,
-                                                                  borderRadius: BorderRadius.circular(12),
-                                                                ),
-                                                                child: const Text('You', style: TextStyle(fontWeight: FontWeight.w800)),
-                                                              ),
-                                                          ],
-                                                        ),
-                                    const SizedBox(height: 4),
-                                    Text('Player ID: ${h.playerId}'),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: ThemeColors.deepNavy.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '${h.totalCatches} catches',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: ThemeColors.deepNavy,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                    const Text(
+                      'Players ranked by total monster catches.',
+                      style: TextStyle(color: ThemeColors.textMuted),
                     ),
+                    const SizedBox(height: 14),
+                    if (loading && hunters.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (error.isNotEmpty)
+                      MessageBanner(message: error, onRetry: _loadTopHunters)
+                    else if (hunters.isEmpty)
+                      const EmptyState(
+                        icon: Icons.emoji_events_outlined,
+                        title: 'No catches found yet',
+                        message: 'Be the first hunter on the board!',
+                      )
+                    else
+                      for (var i = 0; i < hunters.length; i++) ...[
+                        _HunterRow(
+                          hunter: hunters[i],
+                          rank: i + 1,
+                          isOwner: ownerId != null && ownerId.isNotEmpty && ownerId == hunters[i].playerId.trim(),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                   ],
                 ),
+              ),
             ],
           ),
         ),
@@ -280,8 +113,99 @@ class _TopHuntersScreenState extends State<TopHuntersScreen> {
   }
 }
 
-class _HunterStat {
-  _HunterStat({
+class _HunterRow extends StatelessWidget {
+  const _HunterRow({required this.hunter, required this.rank, required this.isOwner});
+
+  final HunterStat hunter;
+  final int rank;
+  final bool isOwner;
+
+  static const _medals = {
+    1: Color(0xFFE2A400),
+    2: Color(0xFF8A96A3),
+    3: Color(0xFFB0703F),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final medal = _medals[rank];
+
+    return Semantics(
+      label: 'Rank $rank, ${hunter.playerName ?? 'Player ${hunter.playerId}'}, ${hunter.totalCatches} catches${isOwner ? ', you' : ''}',
+      excludeSemantics: true,
+      child: Material(
+        color: isOwner ? ThemeColors.pokeYellow.withValues(alpha: 0.18) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radius),
+          side: BorderSide(color: isOwner ? ThemeColors.pokeYellow : ThemeColors.outline, width: isOwner ? 2 : 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: medal ?? ThemeColors.background,
+                ),
+                child: rank == 1
+                    ? const Icon(Icons.emoji_events, color: Colors.white)
+                    : Text(
+                        '$rank',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: medal != null ? Colors.white : ThemeColors.deepNavy,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            hunter.playerName ?? 'Player ${hunter.playerId}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                          ),
+                        ),
+                        if (isOwner) ...[
+                          const SizedBox(width: 8),
+                          const Pill(label: 'You', color: ThemeColors.deepNavy),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text('Trainer ID #${hunter.playerId}', style: const TextStyle(color: ThemeColors.textMuted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${hunter.totalCatches}',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: ThemeColors.deepNavy),
+                  ),
+                  const Text('catches', style: TextStyle(color: ThemeColors.textMuted, fontSize: 12)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class HunterStat {
+  HunterStat({
     required this.playerId,
     required this.totalCatches,
     this.playerName,
@@ -292,13 +216,14 @@ class _HunterStat {
   final String? playerName;
 }
 
-List<_HunterStat> _parseHunterStats(String body) {
+/// Builds the leaderboard from either per-player totals or raw catch rows,
+/// sorted by catches, most first.
+List<HunterStat> parseHunterStats(String body) {
   final decoded = json.decode(body);
-  final list = _extractList(decoded);
-  final byPlayer = <String, _HunterStat>{};
+  final list = decodeList(body) ?? (decoded is Map ? [Map<String, dynamic>.from(decoded)] : <Map<String, dynamic>>[]);
+  final byPlayer = <String, HunterStat>{};
 
-  for (final raw in list) {
-    final map = Map<String, dynamic>.from(raw);
+  for (final map in list) {
     final id = (map['player_id'] ?? map['id'] ?? map['playerId'])?.toString() ?? '';
     if (id.isEmpty) continue;
 
@@ -306,11 +231,11 @@ List<_HunterStat> _parseHunterStats(String body) {
     final name = map['player_name']?.toString();
 
     if (total != null) {
-      byPlayer[id] = _HunterStat(playerId: id, totalCatches: total, playerName: name);
+      byPlayer[id] = HunterStat(playerId: id, totalCatches: total, playerName: name);
     } else {
       // Fallback: if API returns raw catch rows, aggregate by player_id.
       final existing = byPlayer[id];
-      byPlayer[id] = _HunterStat(
+      byPlayer[id] = HunterStat(
         playerId: id,
         totalCatches: (existing?.totalCatches ?? 0) + 1,
         playerName: existing?.playerName ?? name,
@@ -318,23 +243,5 @@ List<_HunterStat> _parseHunterStats(String body) {
     }
   }
 
-  final result = byPlayer.values.toList()
-    ..sort((a, b) => b.totalCatches.compareTo(a.totalCatches));
-  return result;
-}
-
-List<Map<String, dynamic>> _extractList(dynamic data) {
-  if (data is List) {
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-  }
-  if (data is Map && data['data'] is List) {
-    return (data['data'] as List)
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-  }
-  if (data is Map) {
-    return [Map<String, dynamic>.from(data)];
-  }
-  return [];
+  return byPlayer.values.toList()..sort((a, b) => b.totalCatches.compareTo(a.totalCatches));
 }
