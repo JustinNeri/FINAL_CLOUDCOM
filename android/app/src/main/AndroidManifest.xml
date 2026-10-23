@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
     <application
-        android:label="cloudcom_final"
+        android:label="Monster Control Center"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

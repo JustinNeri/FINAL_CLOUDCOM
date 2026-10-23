@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -32,6 +33,8 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
   bool detecting = false;
   bool catching = false;
   bool _alertInProgress = false;
+  // SystemSoundType.alert is silent on Android and web, so the alarm plays an asset.
+  final AudioPlayer _alertPlayer = AudioPlayer();
 
   int? detectedMonsterId;
   String? detectedMonsterName;
@@ -46,7 +49,17 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
   @override
   void dispose() {
     unawaited(_turnOffTorchSafely());
+    unawaited(_alertPlayer.dispose());
     super.dispose();
+  }
+
+  String _detectedLabel(Map<String, dynamic> monster) {
+    final name = monster["monster_name"]?.toString() ?? "monster";
+    final type = monster["monster_type"]?.toString();
+    final distance = monster["distance"]?.toString() ?? "";
+    return "Detected: $name"
+        "${type != null ? " ($type)" : ""}"
+        "${distance.isNotEmpty ? " - $distance m away" : ""}";
   }
 
   Future<void> _turnOffTorchSafely() async {
@@ -69,8 +82,13 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
         // Continue alarm sound even if torch is unavailable.
       }
 
-      while (DateTime.now().isBefore(endAt)) {
-        await SystemSound.play(SystemSoundType.alert);
+      // Stop early if the player leaves the screen.
+      while (mounted && DateTime.now().isBefore(endAt)) {
+        try {
+          await _alertPlayer.play(AssetSource('sounds/detect_alert.wav'));
+        } catch (_) {
+          // Keep vibrating even if audio playback is unavailable.
+        }
         await HapticFeedback.mediumImpact();
         await Future.delayed(const Duration(milliseconds: 700));
       }
@@ -218,10 +236,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
               final first = items.first;
               detectedMonsterId = int.tryParse(first["monster_id"].toString());
               detectedMonsterName = first["monster_name"]?.toString();
-              final distance = first["distance"]?.toString() ?? "";
-              final type = first["monster_type"]?.toString();
-              setState(() => detectMessage =
-                  "Detected: ${detectedMonsterName ?? "monster"}${type != null ? " (" + type + ")" : ""}${distance.isNotEmpty ? " - " + distance + " m away" : ""}");
+              setState(() => detectMessage = _detectedLabel(first));
               unawaited(_triggerDetectionAlert());
             } else {
               setState(() => detectMessage = "No monster found nearby.");
@@ -291,10 +306,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
             final first = nearby.first;
             detectedMonsterId = int.tryParse(first["monster_id"].toString());
             detectedMonsterName = first["monster_name"]?.toString();
-            final distance = first["distance"]?.toString() ?? "";
-            final type = first["monster_type"]?.toString();
-            detectMessage =
-                "Detected: ${detectedMonsterName ?? "monster"}${type != null ? " (" + type + ")" : ""}${distance.isNotEmpty ? " - " + distance + " m away" : ""}";
+            detectMessage = _detectedLabel(first);
           } else {
             detectedMonsterId = null;
             detectedMonsterName = null;
@@ -457,6 +469,7 @@ class _CatchMonsterScreenState extends State<CatchMonsterScreen> {
                           setState(() {
                             detectedMonsterId = id;
                             detectedMonsterName = name;
+                            detectMessage = _detectedLabel(m);
                             catchMessage = "";
                             error = "";
                           });

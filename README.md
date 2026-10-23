@@ -1,16 +1,51 @@
-# cloudcom_final
+# Monster Control Center
 
-A new Flutter project.
+A location-based monster-catching app built with Flutter. Players sign in, detect monsters
+near their GPS position, catch them, and see their catches on a map and a leaderboard.
 
-## Getting Started
+Live web version: https://pokemon-ip-tau.vercel.app
 
-This project is a starting point for a Flutter application.
+## Features
 
-A few resources to get you started if this is your first Flutter project:
+- Player accounts: create, log in, update profile and password
+- Add monsters with a spawn point and radius picked on a map
+- Detect and catch nearby monsters (with flashlight, sound and vibration alert)
+- Edit and delete caught monsters
+- Map of a player's catches and a Top Hunters leaderboard
+- Start/stop the backend cloud instance from the app
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Project layout
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Path | What it is |
+|------|------------|
+| `lib/main.dart` | App entry, dashboard and navigation drawer |
+| `lib/api.dart` | Backend addresses and response error handling |
+| `lib/*_screen.dart`, `lib/*_monster.dart` | One file per screen |
+| `backend/` | CORS helper and setup guide for the PHP server |
+| `vercel.json` | Builds the Flutter web app on Vercel |
+
+## Running locally
+
+```bash
+flutter pub get
+flutter run                     # phone or emulator
+flutter run -d chrome           # web
+flutter test
+```
+
+The app talks to a PHP backend. Its address defaults to the one in `lib/api.dart`; override it
+without editing code:
+
+```bash
+flutter run --dart-define=API_BASE=https://your-backend.example.com
+```
+
+## Deploying
+
+Every push to `main` deploys to Vercel. In Vercel's environment variables, set:
+
+- `API_BASE` – https address of the PHP backend
+- `INSTANCE_API` – URL of the instance start/stop API (optional)
+
+The website only works once the backend is served over https with CORS enabled.
+See [backend/SETUP.md](backend/SETUP.md).

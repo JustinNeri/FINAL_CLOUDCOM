@@ -1,11 +1,11 @@
 {
-    "name": "cloudcom_final",
-    "short_name": "cloudcom_final",
+    "name": "Monster Control Center",
+    "short_name": "Monsters",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#101423",
+    "theme_color": "#101423",
+    "description": "Catch, manage and map monsters near you.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

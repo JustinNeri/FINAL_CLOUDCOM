@@ -119,6 +119,21 @@ class _MainMenuState extends State<MainMenu> {
   /// Null until the instance screen has reported the real status.
   bool? instanceOn;
 
+  /// Catching is paused while the instance is known to be offline.
+  void _openCatch() {
+    if (instanceOn == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The instance is offline. Turn it on in Instance status to catch monsters.')),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CatchMonsterScreen(playerId: widget.currentPlayer.id),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const baseGreen = ThemeColors.deepNavy;
@@ -137,6 +152,7 @@ class _MainMenuState extends State<MainMenu> {
         currentPlayer: widget.currentPlayer,
         onLogout: widget.onLogout,
         onPlayerUpdated: widget.onPlayerUpdated,
+        onOpenCatch: _openCatch,
       ),
       body: Container(
         color: const Color(0xFFF7F9FC),
@@ -270,13 +286,7 @@ class _MainMenuState extends State<MainMenu> {
                       accent: ThemeColors.pokeRed,
                       background: ThemeColors.pokeRed,
                       highlight: true,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => CatchMonsterScreen(playerId: widget.currentPlayer.id),
-                          ),
-                        );
-                      },
+                      onTap: _openCatch,
                     ),
                     _MenuCard(
                       title: 'Edit Monsters',
@@ -569,12 +579,14 @@ class _AppDrawer extends StatelessWidget {
     required this.currentPlayer,
     required this.onLogout,
     required this.onPlayerUpdated,
+    required this.onOpenCatch,
   });
 
   final Color baseGreen;
   final PlayerProfile currentPlayer;
   final VoidCallback onLogout;
   final ValueChanged<PlayerProfile> onPlayerUpdated;
+  final VoidCallback onOpenCatch;
 
   @override
   Widget build(BuildContext context) {
@@ -678,11 +690,7 @@ class _AppDrawer extends StatelessWidget {
             title: const Text('Catch Monsters'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CatchMonsterScreen(playerId: currentPlayer.id),
-                ),
-              );
+              onOpenCatch();
             },
           ),
           ListTile(
